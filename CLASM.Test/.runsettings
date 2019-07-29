@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+    <Catch2Adapter>
+        <DebugBreak>on</DebugBreak>
+        <DiscoverCommandLine>--verbosity high --list-tests *</DiscoverCommandLine>
+        <DiscoverTimeout>500</DiscoverTimeout>
+        <FilenameFilter>.*</FilenameFilter>
+        <IncludeHidden>true</IncludeHidden>
+        <Logging>normal</Logging>
+        <MessageFormat>StatsOnly</MessageFormat>
+        <StackTraceFormat>ShortInfo</StackTraceFormat>
+        <StackTracePointReplacement>,</StackTracePointReplacement>
+        <TestCaseTimeout>10000</TestCaseTimeout>
+        <WorkingDirectory>..\TestData</WorkingDirectory>
+        <WorkingDirectoryRoot>Executable</WorkingDirectoryRoot>
+    </Catch2Adapter>
+</RunSettings>
