@@ -44,7 +44,7 @@ TEST_CASE("Sorce object is constructed with line info", "[Source]")
 	REQUIRE(lines[3].charLength == 6);
 }
 
-TEST_CASE("can get token", "[Source]")
+TEST_CASE("Get token", "[Source]")
 {
 	Source source1{"test", "hello"};
 	REQUIRE(source1.getToken(0, 4).text == "hell");
@@ -54,7 +54,7 @@ TEST_CASE("can get token", "[Source]")
 	REQUIRE_THROWS_AS(source1.getToken(5, 5), std::out_of_range);
 }
 
-TEST_CASE("can get token by whitespace delimiting", "[Source]")
+TEST_CASE("Get token by whitespace delimiting", "[Source]")
 {
 	Source source1{"test", "hello world"};
 	REQUIRE(source1.getToken(0).text == "hello");
@@ -64,7 +64,7 @@ TEST_CASE("can get token by whitespace delimiting", "[Source]")
 	REQUIRE_THROWS_AS(source1.getToken(11), std::out_of_range);
 }
 
-TEST_CASE("can get line index via offset", "[Source]")
+TEST_CASE("Get line index via offset", "[Source]")
 {
 	{
 		Source source{"test", ""};
@@ -83,7 +83,7 @@ TEST_CASE("can get line index via offset", "[Source]")
 	REQUIRE(source.getLineIndexByOffset(99) == 3);
 }
 
-TEST_CASE("can get column via offset", "[Source]")
+TEST_CASE("Get column via offset", "[Source]")
 {
 	Source source{"test", "This line ɥás… § unicode\n⅒\ntest"};
 	REQUIRE(source.getColumnByOffset(4) == 5);

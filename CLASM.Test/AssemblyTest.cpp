@@ -4,7 +4,7 @@
 using namespace CLARA;
 using namespace CLARA::CLASM;
 
-TEST_CASE("can get keyword by name", "[Assembly]")
+TEST_CASE("Get keyword by name", "[Assembly]")
 {
 	auto kw = Keyword::fromName("extern");
 	REQUIRE(kw.has_value());
@@ -16,7 +16,7 @@ TEST_CASE("can get keyword by name", "[Assembly]")
 	REQUIRE(!kw.has_value());
 }
 
-TEST_CASE("can get mnemonic by name", "[Assembly]")
+TEST_CASE("Get mnemonic by name", "[Assembly]")
 {
 	auto mn = Mnemonic::fromName("call");
 	REQUIRE(mn);
@@ -28,7 +28,7 @@ TEST_CASE("can get mnemonic by name", "[Assembly]")
 	REQUIRE(!mn);
 }
 
-TEST_CASE("can get instruction by name", "[Assembly]")
+TEST_CASE("Get instruction by name", "[Assembly]")
 {
 	auto res = Instruction::fromName("add");
 	REQUIRE(res);
@@ -37,7 +37,7 @@ TEST_CASE("can get instruction by name", "[Assembly]")
 	REQUIRE(!res);
 }
 
-TEST_CASE("can get instruction overloads", "[Assembly]")
+TEST_CASE("Get instruction overloads", "[Assembly]")
 {
 	auto& res = Mnemonic::getOverloads(Mnemonic::CALL);
 	REQUIRE(res.size() == size_t{2});
