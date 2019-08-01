@@ -6,7 +6,7 @@ using namespace CLARA;
 using namespace CLARA::CLASM;
 
 template<typename T>
-auto isOneOf(const T& value, std::initializer_list<T> oneOfThese)
+auto isOneOf(const T& value, initializer_list<T> oneOfThese)
 {
 	for (auto& one : oneOfThese) {
 		if (value == one)
@@ -15,7 +15,7 @@ auto isOneOf(const T& value, std::initializer_list<T> oneOfThese)
 	return false;
 }
 
-auto checkResult(const ParserResult& res)
+auto checkResult(const Parser::Result& res)
 {
 	for (auto& report : res.reports) {
 		UNSCOPED_INFO(string{report.diagnosis.getName()} + " ["s + to_string(report.diagnosis.getCodeInt()) + "]: "s + string{report.token.text});
@@ -23,28 +23,25 @@ auto checkResult(const ParserResult& res)
 	return res.ok();
 }
 
-auto getParser(bool forceTokenization = false)
+auto getParseOpts(bool forceTokenization = false)
 {
 	// disabling reporting errors to stdout/stderr as it will mess with test results
-	auto options = ParserOptions{};
+	auto options = Parser::Options{};
 	options.errorReporting = false;
 	options.testForceTokenization = forceTokenization;
-	return Parser{options};
+	return options;
 }
 
 struct ParsingTestHelper {
-	Parser parser;
+	Parser::Options options;
 	shared_ptr<TokenStream> tokensPtr;
 
-	ParsingTestHelper(bool forceTokenization = false) : parser(getParser(forceTokenization))
-	{ }
-
-	ParsingTestHelper(Parser&& parser_) : parser(parser_)
+	ParsingTestHelper(bool forceTokenization = false) : options(getParseOpts(forceTokenization))
 	{ }
 
 	auto parse(string code)
 	{
-		return parser.tokenize(make_shared<Source>("test", code));
+		return Parser::tokenize(options, make_shared<Source>("test", code));
 	}
 
 	auto& parseExpect(string code, initializer_list<TokenType> types)

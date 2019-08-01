@@ -3,7 +3,7 @@
 
 using namespace CLARA::CLASM;
 
-namespace CLARA::CLASM {
+namespace CLARA::CLASM::Parser {
 
 using TokenVec = vector<Token>;
 
@@ -62,7 +62,7 @@ struct Continue {
 struct Finish {
 	optional<Token> token;
 	optional<Expected> expected;
-	vector<ParserReport> reports;
+	vector<Report> reports;
 
 	Finish() = default;
 
@@ -119,7 +119,7 @@ struct Finish {
 };
 
 struct Fatal {
-	ParserReport error;
+	Report error;
 
 	Fatal() = default;
 
@@ -148,7 +148,7 @@ struct Error {
 using ParseState = variant<Finish, Continue, Fatal>;
 using ParseResult = variant<Success, Error>;
 
-struct ParserState {
+struct State {
 	TokenStream& tokens;
 	Segment::Type segment = Segment::None;
 };
@@ -297,16 +297,6 @@ auto parseString(const ParseState&, Token&& token)->ParseState
 	return result;
 }
 
-auto& addExpectationsForSegment(Finish& state, Segment::Type segment)
-{
-	switch (segment) {
-	case Segment::None: state.expect({TokenType::EOL, TokenType::Identifier, TokenType::Segment}); break;
-	case Segment::Code: state.expect({TokenType::EOL, TokenType::Identifier, TokenType::Label, TokenType::Segment}); break;
-	case Segment::Data: state.expect({TokenType::EOL, TokenType::Label, TokenType::Segment}); break;
-	}
-	return state;
-}
-
 auto parseToken(const ParseState& state, Token&& token)->ParseState
 {
 	switch (token.type) {
@@ -446,7 +436,7 @@ auto parseInstructionLine(TokenVec& tokens)->ParseResult
 	return parseLine(get<Instruction::Type>(tokens[0].annotation));
 }
 
-auto parseLine(ParserState& parser, Finish&& state)->ParseState
+auto parseLine(State& parser, Finish&& state)->ParseState
 {
 	if (!state.token) {
 		return state;
@@ -478,7 +468,7 @@ auto parseLine(ParserState& parser, Finish&& state)->ParseState
 	return Finish().error(addedToken,diagnose<DiagCode::UnexpectedToken>(addedToken.type));
 }
 
-auto parseLine(ParserState& parser, Continue&& state)->ParseState
+auto parseLine(State& parser, Continue&& state)->ParseState
 {
 	auto& tokens = state.toVector();
 
@@ -652,28 +642,28 @@ auto lexOneOf(string_view sv, initializer_list<LexRule> rules)->optional<LexResu
 	return nullopt;
 }
 
-ParserReport::ParserReport(ReportType type, Source::Token token, Diagnosis&& diagnosis) :
+Report::Report(ReportType type, Source::Token token, Diagnosis&& diagnosis) :
 	type(type), token(token), diagnosis(diagnosis)
 { }
 
-auto ParserReport::info(const Source::Token& token, Diagnosis&& diagnosis)->ParserReport
+auto Report::info(const Source::Token& token, Diagnosis&& diagnosis)->Report
 {
-	return ParserReport(ReportType::Info, token, forward<Diagnosis>(diagnosis));
+	return Report(ReportType::Info, token, forward<Diagnosis>(diagnosis));
 }
 
-auto ParserReport::warning(const Source::Token& token, Diagnosis&& diagnosis)->ParserReport
+auto Report::warning(const Source::Token& token, Diagnosis&& diagnosis)->Report
 {
-	return ParserReport(ReportType::Warning, token, forward<Diagnosis>(diagnosis));
+	return Report(ReportType::Warning, token, forward<Diagnosis>(diagnosis));
 }
 
-auto ParserReport::error(const Source::Token& token, Diagnosis&& diagnosis)->ParserReport
+auto Report::error(const Source::Token& token, Diagnosis&& diagnosis)->Report
 {
-	return ParserReport(ReportType::Error, token, forward<Diagnosis>(diagnosis));
+	return Report(ReportType::Error, token, forward<Diagnosis>(diagnosis));
 }
 
-auto ParserReport::fatal(const Source::Token& token, Diagnosis&& diagnosis)->ParserReport
+auto Report::fatal(const Source::Token& token, Diagnosis&& diagnosis)->Report
 {
-	return ParserReport(ReportType::Fatal, token, forward<Diagnosis>(diagnosis));
+	return Report(ReportType::Fatal, token, forward<Diagnosis>(diagnosis));
 }
 
 const auto lexRules = initializer_list<LexRule>{
@@ -691,19 +681,19 @@ const auto lexRules = initializer_list<LexRule>{
 auto getExpectedTokenError(const Expected& expect, const Token& token)
 {
 	return std::visit(visitor{
-		[token](TokenType type)->optional<ParserReport> {
+		[token](TokenType type)->optional<Report> {
 			if (token.type != type) {
-				return ParserReport::error(token, diagnose<DiagCode::ExpectedToken>(token.type, type));
+				return Report::error(token, diagnose<DiagCode::ExpectedToken>(token.type, type));
 			}
 			return nullopt;
 		},
-		[token](const pair<TokenType, string>& typeAndValue)->optional<ParserReport> {
+		[token](const pair<TokenType, string>& typeAndValue)->optional<Report> {
 			if (token.type != typeAndValue.first || token.text != typeAndValue.second) {
-				return ParserReport::error(token, diagnose<DiagCode::ExpectedToken>(token.type, typeAndValue));
+				return Report::error(token, diagnose<DiagCode::ExpectedToken>(token.type, typeAndValue));
 			}
 			return nullopt;
 		},
-		[token](const AnyOf& types)->optional<ParserReport> {
+		[token](const AnyOf& types)->optional<Report> {
 			if (!std::any_of(types.begin(), types.end(), [token](const AnyOfExpect& expected) {
 				return std::visit(visitor{
 					[&](TokenType type) { return token.type == type; },
@@ -713,95 +703,101 @@ auto getExpectedTokenError(const Expected& expect, const Token& token)
 				}, expected);
 			})) {
 				auto ss = stringstream{};
-				return ParserReport::error(token, diagnose<DiagCode::ExpectedToken>(token.type, types));
+				return Report::error(token, diagnose<DiagCode::ExpectedToken>(token.type, types));
 			}
 			return nullopt;
 		}
 	}, expect);
 }
 
-Parser::Parser(const ParserOptions& options) :
-	options(options)
-{ }
+auto& addExpectationsForSegment(Finish& state, Segment::Type segment)
+{
+	switch (segment) {
+	case Segment::None: state.expect({TokenType::EOL, TokenType::Identifier, TokenType::Segment}); break;
+	case Segment::Code: state.expect({TokenType::EOL, TokenType::Identifier, TokenType::Label, TokenType::Segment}); break;
+	case Segment::Data: state.expect({TokenType::EOL, TokenType::Label, TokenType::Segment}); break;
+	}
+	return state;
+}
 
-Parser::Parser(ReporterFunc reporter, const ParserOptions& options) :
-	reporter(reporter), options(options)
-{ }
-
-auto Parser::tokenize(shared_ptr<const Source> source)->ParserResult
+auto Parser::tokenize(const Options& options, shared_ptr<const Source> source)->Result
 {
 	auto ts = make_shared<TokenStream>(source);
 	auto code = string_view(source->getCode());
-	auto result = ParserResult{ts};
+	auto result = Result{ts};
 	auto offset = size_t(0);
-	auto parserState = ParserState{*ts};
+	auto parserState = State{*ts};
 	auto state = ParseState{[]() {
 		Finish state;
 		addExpectationsForSegment(state, Segment::None);
 		return state;
 	}()};
+	auto reporter = ([&]()->Reporter {
+		if (options.reporter.hasImpl() && options.errorReporting) {
+			Reporter reporter;
+			reporter.setImpl([source](const ReportData& log)->void {
+				using namespace fmt::literals;
 
-	if (!reporter.hasImpl() && options.errorReporting) {
-		reporter.setImpl([source](const ReportData& log)->void {
-			using namespace fmt::literals;
+				auto stream = log.type == ReportType::Fatal || log.type == ReportType::Error ? stdout : stdout;
+				auto reportType = string_view{[](ReportType type) {
+					switch (type) {
+					case ReportType::Fatal:
+						return "fatal"sv;
+					case ReportType::Error:
+						return "error"sv;
+					case ReportType::Warning:
+						return "warn"sv;
+					case ReportType::Info:
+						return "info"sv;
+					}
+					return "unknown"sv;
+				}(log.type)};
 
-			auto stream = log.type == ReportType::Fatal || log.type == ReportType::Error ? stdout : stdout;
-			auto reportType = string_view{[](ReportType type) {
-				switch (type) {
-				case ReportType::Fatal:
-					return "fatal"sv;
-				case ReportType::Error:
-					return "error"sv;
-				case ReportType::Warning:
-					return "warn"sv;
-				case ReportType::Info:
-					return "info"sv;
+				auto& report = std::any_cast<const Report&>(log.data);
+				auto& lineInfo = source->getLineInfo(source->getLineIndexByOffset(report.token.offset));
+				auto lineNum = to_string(lineInfo.number);
+				auto lineEnd = lineInfo.offset + lineInfo.length;
+				auto tokenEnd = report.token.offset + report.token.text.size();
+
+				fmt::print(stream, fmt::emphasis::bold | fg(fmt::color::red), "{}[E{:04}]", reportType, report.diagnosis.getCodeInt());
+				fmt::print(stream, fmt::text_style{fmt::emphasis::bold}, ": {}\n", report.diagnosis.getName());
+				fmt::print(stream, fg(fmt::color::blue), "{:>{}}", "--> ", lineNum.size() + 4);
+				fmt::print(
+					stream,
+					"{file}:{line}:{column}\n",
+					"file"_a = source->getName(),
+					"line"_a = lineNum,
+					"column"_a = source->getColumnByOffset(report.token.offset)
+				);
+				fmt::print(stream, fg(fmt::color::blue), "{} |  ", lineNum);
+
+				if (report.token.offset > 0) {
+					fmt::print(stream, "{}", source->getText(lineInfo.offset, report.token.offset - lineInfo.offset));
 				}
-				return "unknown"sv;
-			}(log.type)};
 
-			auto& report = std::any_cast<const ParserReport&>(log.data);
-			auto& lineInfo = source->getLineInfo(source->getLineIndexByOffset(report.token.offset));
-			auto lineNum = to_string(lineInfo.number);
-			auto lineEnd = lineInfo.offset + lineInfo.length;
-			auto tokenEnd = report.token.offset + report.token.text.size();
+				if (tokenEnd < lineEnd) {
+					fmt::print(stream, fg(fmt::color::red), "{}", report.token.text);
+					fmt::print(stream, "{}\n", source->getText(tokenEnd, lineEnd - tokenEnd));
+				}
+				else {
+					fmt::print(stream, fg(fmt::color::red), "{}\n", report.token.text);
+				}
 
-			fmt::print(stream, fmt::emphasis::bold | fg(fmt::color::red), "{}[E{:04}]", reportType, report.diagnosis.getCodeInt());
-			fmt::print(stream, fmt::text_style{fmt::emphasis::bold}, ": {}\n", report.diagnosis.getName());
-			fmt::print(stream, fg(fmt::color::blue), "{:>{}}", "--> ", lineNum.size() + 4);
-			fmt::print(
-				stream,
-				"{file}:{line}:{column}\n",
-				"file"_a = source->getName(),
-				"line"_a = lineNum,
-				"column"_a = source->getColumnByOffset(report.token.offset)
-			);
-			fmt::print(stream, fg(fmt::color::blue), "{} |  ", lineNum);
-			
-			if (report.token.offset > 0) {
-				fmt::print(stream, "{}", source->getText(lineInfo.offset, report.token.offset - lineInfo.offset));
-			}
-
-			if (tokenEnd < lineEnd) {
-				fmt::print(stream, fg(fmt::color::red), "{}", report.token.text);
-				fmt::print(stream, "{}\n", source->getText(tokenEnd, lineEnd - tokenEnd));
-			}
-			else {
-				fmt::print(stream, fg(fmt::color::red), "{}\n", report.token.text);
-			}
-
-			fmt::print(
-				stream,
-				fg(fmt::color::red),
-				"{:>{}}{:^>{}} {}\n\n",
-				"",
-				report.token.offset + lineNum.size() + 4,
-				"^",
-				report.token.text.size(),
-				report.diagnosis.getMessage()
-			);
-		});
-	}
+				fmt::print(
+					stream,
+					fg(fmt::color::red),
+					"{:>{}}{:^>{}} {}\n\n",
+					"",
+					report.token.offset + lineNum.size() + 4,
+					"^",
+					report.token.text.size(),
+					report.diagnosis.getMessage()
+				);
+			});
+			return reporter;
+		}
+		return options.reporter;
+	})();
 
 	auto step = [=, &result, &parserState](ParseState state, size_t offset, optional<LexResult> res)->ParseState {
 		if (!res) {

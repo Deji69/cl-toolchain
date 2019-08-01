@@ -6,25 +6,25 @@
 #include <CLASM/Diagnostic.h>
 #include <CLASM/Source.h>
 
-namespace CLARA::CLASM {
+namespace CLARA::CLASM::Parser {
 
-struct ParserReport {
+struct Report {
 	ReportType type;
 	Source::Token token;
 	Diagnosis diagnosis;
 
-	ParserReport() = default;
-	ParserReport(ReportType type, Source::Token token, Diagnosis&& diagnosis);
+	Report() = default;
+	Report(ReportType type, Source::Token token, Diagnosis&& diagnosis);
 
-	static auto info(const Source::Token&, Diagnosis&&)->ParserReport;
-	static auto warning(const Source::Token&, Diagnosis&&)->ParserReport;
-	static auto error(const Source::Token&, Diagnosis&&)->ParserReport;
-	static auto fatal(const Source::Token&, Diagnosis&&)->ParserReport;
+	static auto info(const Source::Token&, Diagnosis&&)->Report;
+	static auto warning(const Source::Token&, Diagnosis&&)->Report;
+	static auto error(const Source::Token&, Diagnosis&&)->Report;
+	static auto fatal(const Source::Token&, Diagnosis&&)->Report;
 };
 
-struct ParserResult {
+struct Result {
 	shared_ptr<TokenStream> tokens;
-	vector<ParserReport> reports;
+	vector<Report> reports;
 	size_t numWarnings = 0;
 	size_t numErrors = 0;
 	bool hadFatal = false;
@@ -40,22 +40,12 @@ struct ParserResult {
 	}
 };
 
-struct ParserOptions {
+struct Options {
+	Reporter reporter;
 	bool errorReporting = true;
 	bool testForceTokenization = false;                  // Disables errors that may prevent tokenization
 };
 
-class Parser {
-public:
-	Parser() = default;
-	Parser(const ParserOptions& options);
-	Parser(ReporterFunc reporter, const ParserOptions& options = ParserOptions{});
-
-	auto tokenize(shared_ptr<const Source> source)->ParserResult;
-
-private:
-	ParserOptions options;
-	Reporter reporter;
-};
+auto tokenize(const Options& options, shared_ptr<const Source> source)->Result;
 
 }
