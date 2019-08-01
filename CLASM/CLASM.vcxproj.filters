@@ -84,6 +84,9 @@
     <ClInclude Include="Parser.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="Label.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

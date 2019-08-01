@@ -149,7 +149,7 @@ using ParseState = variant<Finish, Continue, Fatal>;
 using ParseResult = variant<Success, Error>;
 
 struct State {
-	TokenStream& tokens;
+	ParseInfo& info;
 	Segment::Type segment = Segment::None;
 };
 
@@ -448,23 +448,23 @@ auto parseLine(State& parser, Finish&& state)->ParseState
 	default: break;
 
 	case TokenType::Identifier:
-		return Finish().error(parser.tokens.push(move(token)), diagnose<DiagCode::InvalidIdentifier>());
+		return Finish().error(parser.info.tokens->push(move(token)), diagnose<DiagCode::InvalidIdentifier>());
 
 	case TokenType::Segment:
 		parser.segment = get<Segment::Type>(token.annotation);
-		parser.tokens.push(move(token));
+		parser.info.tokens->push(move(token));
 		return Finish().expect(TokenType::EOL);
 
 	case TokenType::Label:
-		parser.tokens.push(move(token));
+		parser.info.tokens->push(move(token));
 		return Finish();
 
 	case TokenType::Instruction:
-		parser.tokens.push(move(token));
+		parser.info.tokens->push(move(token));
 		return Finish().expect({TokenType::EOL, make_pair(TokenType::Separator, ","s)});
 	}
 
-	auto& addedToken = parser.tokens.push(move(token));
+	auto& addedToken = parser.info.tokens->push(move(token));
 	return Finish().error(addedToken,diagnose<DiagCode::UnexpectedToken>(addedToken.type));
 }
 
@@ -484,7 +484,7 @@ auto parseLine(State& parser, Continue&& state)->ParseState
 				}
 
 				for (auto& token : get<Success>(res).tokens) {
-					parser.tokens.push(token);
+					parser.info.tokens->push(token);
 				}
 			}
 			return Finish().expect({TokenType::EOL, make_pair(TokenType::Separator, ","s)});
@@ -493,10 +493,8 @@ auto parseLine(State& parser, Continue&& state)->ParseState
 			break;
 
 		case TokenType::Label:
-			break;
-
 		case TokenType::Segment:
-			return Finish().expect(TokenType::EOL);
+			throw ParseException("unexpected token in continue state");
 
 		default:
 			return Fatal(tokens[0], diagnose<DiagCode::UnexpectedTokenBeganLine>());
@@ -722,11 +720,14 @@ auto& addExpectationsForSegment(Finish& state, Segment::Type segment)
 
 auto Parser::tokenize(const Options& options, shared_ptr<const Source> source)->Result
 {
-	auto ts = make_shared<TokenStream>(source);
 	auto code = string_view(source->getCode());
-	auto result = Result{ts};
 	auto offset = size_t(0);
-	auto parserState = State{*ts};
+	
+	auto ts = make_shared<TokenStream>(source);
+	auto result = Result{ts};
+	auto info = ParseInfo{ts};
+	auto parserState = State{info};
+
 	auto state = ParseState{[]() {
 		Finish state;
 		addExpectationsForSegment(state, Segment::None);
@@ -853,6 +854,7 @@ auto Parser::tokenize(const Options& options, shared_ptr<const Source> source)->
 				}, parseToken(state, move(token)));
 			}
 		}
+
 		return state;
 	};
 

@@ -192,6 +192,7 @@
     <ClInclude Include="Compiler.h" />
     <ClInclude Include="Diagnostic.h" />
     <ClInclude Include="IBinaryOutput.h" />
+    <ClInclude Include="Label.h" />
     <ClInclude Include="Parser.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Assembly.h" />

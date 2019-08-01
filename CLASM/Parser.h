@@ -5,8 +5,14 @@
 #include <CLASM/Reporter.h>
 #include <CLASM/Diagnostic.h>
 #include <CLASM/Source.h>
+#include <CLASM/Label.h>
 
 namespace CLARA::CLASM::Parser {
+
+struct ParseException : std::runtime_error {
+	ParseException(const char* msg) : std::runtime_error(msg)
+	{ }
+};
 
 struct Report {
 	ReportType type;
@@ -22,8 +28,13 @@ struct Report {
 	static auto fatal(const Source::Token&, Diagnosis&&)->Report;
 };
 
-struct Result {
+struct ParseInfo {
 	shared_ptr<TokenStream> tokens;
+	unordered_map<string, Label> labels;
+};
+
+struct Result {
+	ParseInfo info;
 	vector<Report> reports;
 	size_t numWarnings = 0;
 	size_t numErrors = 0;
