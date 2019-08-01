@@ -17,10 +17,9 @@ const auto mnemonics = vector<pair<string, Mnemonic::Type>>{
 	{"jmp",    Mnemonic::JMP},
 	{"call",   Mnemonic::CALL},
 };
-const auto segmentNames = array<pair<string, Segment::Type>, Segment::MAX>{{
+const auto segmentNames = vector<pair<string, Segment::Type>>{{
 	{"code", Segment::Code},
 	{"data", Segment::Data},
-	{"string", Segment::String},
 }};
 const auto mnemonicTable = array<vector<InstructionOverload>, static_cast<size_t>(Mnemonic::MAX)>{{
 	/* PUSH */ {

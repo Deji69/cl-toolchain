@@ -16,7 +16,7 @@ Source::Token::Token(const Source& source, size_t offset, size_t length) :
 
 Source::Token::Token(const Token& first, const Token& last)
 {
-	assert(last.text.data() > first.text.data());
+	assert(last.text.data() >= first.text.data());
 	offset = first.offset;
 	text = string_view{first.text.data(), last.offset - first.offset + last.text.size()};
 }

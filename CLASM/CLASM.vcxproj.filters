@@ -81,9 +81,6 @@
     <ClInclude Include="Reporter.h">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="Parser_old.h">
-      <Filter>src</Filter>
-    </ClInclude>
     <ClInclude Include="Parser.h">
       <Filter>src</Filter>
     </ClInclude>

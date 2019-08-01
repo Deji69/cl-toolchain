@@ -193,7 +193,6 @@
     <ClInclude Include="Diagnostic.h" />
     <ClInclude Include="IBinaryOutput.h" />
     <ClInclude Include="Parser.h" />
-    <ClInclude Include="Parser_old.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Assembly.h" />
     <ClInclude Include="Reporter.h" />

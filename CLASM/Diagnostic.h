@@ -1,10 +1,14 @@
 #pragma once
 #include <CLASM/Common.h>
 #include <CLASM/Assembly.h>
-#include <CLASM/Parser.h>
 #include <CLASM/Token.h>
 
 namespace CLARA::CLASM {
+	using TokenAndString = pair<TokenType, string>;
+	using AnyOfExpect = variant<TokenType, TokenAndString>;
+	using AnyOf = vector<AnyOfExpect>;
+	using Expected = variant<TokenType, TokenAndString, AnyOf>;
+
 	enum class DiagCode : uint32_t {
 		Unknown = 0,
 		// Internal errors
@@ -23,6 +27,7 @@ namespace CLARA::CLASM {
 		LiteralValueSizeOverflow = 2010,       // a literal value was supplied that exceeds the bit size of the accepted operand
 		InvalidEscapeSequence = 2011,          // literal string contained an invalid escape sequence, e.g. \z
 		InvalidHexEscapeSequence = 2011,       // literal string contained an invalid hex escape sequence, e.g. \xGG
+		UnexpectedOperand = 2012,              // more tokens provided than an instruction allows operands for
 	};
 
 	template<DiagCode TCode>
@@ -136,22 +141,39 @@ namespace CLARA::CLASM {
 	template<> struct Diagnostic<DiagCode::ExpectedToken> {
 		constexpr static auto name = "unexpected token"sv;
 
-		using Expected = variant<TokenType, pair<TokenType, string>, vector<TokenType>>;
 		TokenType given;                                   // the type of token that was given
 		Expected expected;                                 // the type of token expected
 
 		auto formatMessage() const
 		{
-			return to_string(given) + " given when expecting " + std::visit(visitor{
+			return to_string(given) + " encountered when expecting "s + std::visit(visitor{
 				[](TokenType type) {
 					return to_string(type);
 				},
 				[](const pair<TokenType, string>& tokenAndString) {
 					return "'" + tokenAndString.second + "'";
 				},
-				[](const vector<TokenType>& tokenTypes) {
-					return "one of: " + join(tokenTypes, ", ");
-				}
+				[](const AnyOf& tokenTypes) {
+					if (tokenTypes.empty()) {
+						return "<error>"s;
+					}
+
+					auto expectToStr = [](const AnyOfExpect& expect) {
+						return std::visit(visitor{
+							[](TokenType type) {
+								return to_string(type);
+							},
+							[](const pair<TokenType, string>& typeAndCode) {
+								return "'"s + typeAndCode.second + "'"s;
+							},
+						}, expect);
+					};
+					auto begin = tokenTypes.begin();
+
+					return "one of: "s + std::accumulate(begin + 1, tokenTypes.end(), expectToStr(*begin), [&](const string& str, auto val) {
+						return str + ", "s + expectToStr(val);
+					});
+				},
 			}, expected);
 		}
 	};
@@ -241,7 +263,7 @@ namespace CLARA::CLASM {
 	template<> struct Diagnostic<DiagCode::InvalidHexEscapeSequence> {
 		constexpr static auto name = "invalid hex escape sequence"sv;
 		
-		enum class Problem {
+		enum Problem {
 			Unknown,
 			NoHexChars,
 			UnevenNumberOfChars,
@@ -262,6 +284,33 @@ namespace CLARA::CLASM {
 			case Problem::Unknown: break;
 			}
 			return "invalid hex escape sequence"s;
+		}
+	};
+
+	template<> struct Diagnostic<DiagCode::UnexpectedOperand> {
+		constexpr static auto name = "unexpected operand";
+
+		optional<TokenType> encountered;
+		uint numExpected;
+		uint numGiven;
+
+		auto formatMessage() const
+		{
+			if (encountered) {
+				if (*encountered == TokenType::Instruction || *encountered == TokenType::Mnemonic) {
+					return "unexpected instruction encountered, use ',' to separate multiple instructions on one line"s;
+				}
+			}
+
+			if (!numExpected) {
+				return fmt::format("instruction takes no operands, {} provided", numGiven);
+			}
+
+			if (numGiven > 1) {
+				return fmt::format("expected {} {}, found {}", numExpected, numExpected == 1 ? "operand" : "operands", numGiven);
+			}
+
+			return "unexpected additional operand"s;
 		}
 	};
 }

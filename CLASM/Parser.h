@@ -42,6 +42,7 @@ struct ParserResult {
 
 struct ParserOptions {
 	bool errorReporting = true;
+	bool testForceTokenization = false;                  // Disables errors that may prevent tokenization
 };
 
 class Parser {

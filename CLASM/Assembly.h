@@ -25,7 +25,7 @@ struct InstructionOperand {
 class Segment {
 public:
 	enum Type {
-		None, Data, String, Code, MAX
+		None, Data, Code, MAX
 	};
 
 public:

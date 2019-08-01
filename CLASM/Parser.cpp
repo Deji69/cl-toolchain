@@ -7,9 +7,6 @@ namespace CLARA::CLASM {
 
 using TokenVec = vector<Token>;
 
-using AnyOf = initializer_list<TokenType>;
-using Expected = variant<TokenType, pair<TokenType, string>, AnyOf>;
-
 struct LexRule {
 	TokenType type;
 	function<size_t(const char*, size_t)> func;
@@ -75,34 +72,46 @@ struct Finish {
 	Finish(const Token& token) : token(token)
 	{ }
 
-	auto expect(TokenType type)
+	auto& merge(const Finish& other)
+	{
+		reports.insert(reports.end(), other.reports.begin(), other.reports.end());
+		return *this;
+	}
+
+	auto& expect(TokenType type)
 	{
 		expected.emplace(type);
 		return *this;
 	}
 
-	auto expect(TokenType type, string value)
+	auto& expect(TokenType type, string value)
 	{
 		expected.emplace(make_pair(type, value));
 		return *this;
 	}
 
+	auto& expect(AnyOf types)
+	{
+		expected.emplace(types);
+		return *this;
+	}
+
 	template<typename... TArgs>
-	auto report(TArgs&&... args)
+	auto& report(TArgs&&... args)
 	{
 		reports.emplace_back(forward<TArgs>(args)...);
 		return *this;
 	}
 
 	template<typename... TArgs>
-	auto warn(TArgs&&... args)
+	auto& warn(TArgs&&... args)
 	{
 		reports.emplace_back(ReportType::Warning, forward<TArgs>(args)...);
 		return *this;
 	}
 
 	template<typename... TArgs>
-	auto error(TArgs&&... args)
+	auto& error(TArgs&&... args)
 	{
 		reports.emplace_back(ReportType::Error, forward<TArgs>(args)...);
 		return *this;
@@ -167,27 +176,26 @@ auto parseIdentifier(const ParseState& state, Token&& token)->ParseState
 	}
 
 	if (is<Continue>(state)) {
-		return Continue{token};
+		return Continue(token);
 	}
 
-	auto finish = Finish{token};
-	return finish.error(*finish.token, diagnose<DiagCode::InvalidIdentifier>());
+	return Finish(token);
 }
 
 auto parseSegment(const ParseState& state, Token&& token)->ParseState
 {
 	if (is<Continue>(state)) {
-		return Finish{}.error(token, diagnose<DiagCode::UnexpectedSegmentAfterTokens>());
+		return Finish().error(token, diagnose<DiagCode::UnexpectedSegmentAfterTokens>());
 	}
 
 	auto id = token.text.substr(1);
 
 	if (auto segment = Segment::fromName(id)) {
 		token.annotation = *segment;
-		return Finish{token}.expect(TokenType::EOL);
+		return Finish(token);
 	}
 
-	return Finish{}.error(token, diagnose<DiagCode::InvalidSegment>());
+	return Finish().error(token, diagnose<DiagCode::InvalidSegment>());
 }
 
 auto parseString(const ParseState&, Token&& token)->ParseState
@@ -289,6 +297,16 @@ auto parseString(const ParseState&, Token&& token)->ParseState
 	return result;
 }
 
+auto& addExpectationsForSegment(Finish& state, Segment::Type segment)
+{
+	switch (segment) {
+	case Segment::None: state.expect({TokenType::EOL, TokenType::Identifier, TokenType::Segment}); break;
+	case Segment::Code: state.expect({TokenType::EOL, TokenType::Identifier, TokenType::Label, TokenType::Segment}); break;
+	case Segment::Data: state.expect({TokenType::EOL, TokenType::Label, TokenType::Segment}); break;
+	}
+	return state;
+}
+
 auto parseToken(const ParseState& state, Token&& token)->ParseState
 {
 	switch (token.type) {
@@ -350,8 +368,8 @@ auto parseInstructionLine(TokenVec& tokens)->ParseResult
 		auto success = Success{};
 		auto& operands = Instruction::getOperands(instruction);
 		auto begin = std::begin(tokens) + 1;
-		auto it = begin;
 		auto end = std::end(tokens);
+		auto it = begin;
 
 		success.tokens.reserve(static_cast<size_t>(std::abs(std::distance(it, end) + 1)));
 
@@ -389,8 +407,8 @@ auto parseInstructionLine(TokenVec& tokens)->ParseResult
 			else {
 				for (auto type : operand.types) {
 					if (it == end) {
-						auto last = std::prev(it);
-						return Error{Source::Token(*begin, *last), diagnose<DiagCode::MissingOperand>(type)};
+						auto token = begin != end ? Source::Token(*begin, *std::prev(it)) : *std::begin(tokens);
+						return Error{token, diagnose<DiagCode::MissingOperand>(type)};
 					}
 
 					auto result = parseOperand(type, *it++);
@@ -399,6 +417,14 @@ auto parseInstructionLine(TokenVec& tokens)->ParseResult
 						return get<Error>(result);
 				}
 			}
+		}
+
+		if (it != end) {
+			auto last = end - 1;
+			auto token = it != last ? Source::Token(*it, *last) : Source::Token(*it);
+			auto numExpected = static_cast<uint>(operands.size());
+			auto numProvided = static_cast<uint>(std::distance(begin, end));
+			return Error{token, diagnose<DiagCode::UnexpectedOperand>(it->type, numExpected, numProvided)};
 		}
 
 		return move(success);
@@ -429,19 +455,27 @@ auto parseLine(ParserState& parser, Finish&& state)->ParseState
 	auto& token = *state.token;
 
 	switch (state.token->type) {
+	default: break;
+
+	case TokenType::Identifier:
+		return Finish().error(parser.tokens.push(move(token)), diagnose<DiagCode::InvalidIdentifier>());
+
 	case TokenType::Segment:
 		parser.segment = get<Segment::Type>(token.annotation);
 		parser.tokens.push(move(token));
-		return Finish();
+		return Finish().expect(TokenType::EOL);
 
 	case TokenType::Label:
-	case TokenType::Instruction:
 		parser.tokens.push(move(token));
 		return Finish();
+
+	case TokenType::Instruction:
+		parser.tokens.push(move(token));
+		return Finish().expect({TokenType::EOL, make_pair(TokenType::Separator, ","s)});
 	}
 
-	auto& tok = parser.tokens.push(move(token));
-	return Finish().error(tok, diagnose<DiagCode::UnexpectedToken>(tok.type));
+	auto& addedToken = parser.tokens.push(move(token));
+	return Finish().error(addedToken,diagnose<DiagCode::UnexpectedToken>(addedToken.type));
 }
 
 auto parseLine(ParserState& parser, Continue&& state)->ParseState
@@ -456,27 +490,29 @@ auto parseLine(ParserState& parser, Continue&& state)->ParseState
 				auto res = parseInstructionLine(tokens);
 				
 				if (is<Error>(res)) {
-					return Finish{}.error(tokens[0], move(get<Error>(res).info));
+					return Finish().error(tokens[0], move(get<Error>(res).info));
 				}
 
 				for (auto& token : get<Success>(res).tokens) {
 					parser.tokens.push(token);
 				}
 			}
-			break;
+			return Finish().expect({TokenType::EOL, make_pair(TokenType::Separator, ","s)});
 
 		case TokenType::Keyword:
 			break;
 
 		case TokenType::Label:
+			break;
+
 		case TokenType::Segment:
-			return Finish();
+			return Finish().expect(TokenType::EOL);
 
 		default:
 			return Fatal(tokens[0], diagnose<DiagCode::UnexpectedTokenBeganLine>());
 		}
 	}
-	return Finish{};
+	return Finish();
 }
 
 auto lexComment(const char* str, size_t len)
@@ -632,7 +668,7 @@ auto ParserReport::warning(const Source::Token& token, Diagnosis&& diagnosis)->P
 
 auto ParserReport::error(const Source::Token& token, Diagnosis&& diagnosis)->ParserReport
 {
-	return ParserReport(ReportType::Info, token, forward<Diagnosis>(diagnosis));
+	return ParserReport(ReportType::Error, token, forward<Diagnosis>(diagnosis));
 }
 
 auto ParserReport::fatal(const Source::Token& token, Diagnosis&& diagnosis)->ParserReport
@@ -668,11 +704,16 @@ auto getExpectedTokenError(const Expected& expect, const Token& token)
 			return nullopt;
 		},
 		[token](const AnyOf& types)->optional<ParserReport> {
-			if (!std::any_of(types.begin(), types.end(), [token](TokenType type) {
-				return token.type == type;
+			if (!std::any_of(types.begin(), types.end(), [token](const AnyOfExpect& expected) {
+				return std::visit(visitor{
+					[&](TokenType type) { return token.type == type; },
+					[&](const pair<TokenType, string>& typeAndStr) {
+						return token.type == typeAndStr.first && token.getText() == typeAndStr.second;
+					},
+				}, expected);
 			})) {
 				auto ss = stringstream{};
-				return ParserReport::error(token, diagnose<DiagCode::ExpectedToken>(token.type, vector<TokenType>(types)));
+				return ParserReport::error(token, diagnose<DiagCode::ExpectedToken>(token.type, types));
 			}
 			return nullopt;
 		}
@@ -690,11 +731,15 @@ Parser::Parser(ReporterFunc reporter, const ParserOptions& options) :
 auto Parser::tokenize(shared_ptr<const Source> source)->ParserResult
 {
 	auto ts = make_shared<TokenStream>(source);
-	auto code = string_view{source->getCode()};
+	auto code = string_view(source->getCode());
 	auto result = ParserResult{ts};
-	auto offset = size_t{0};
+	auto offset = size_t(0);
 	auto parserState = ParserState{*ts};
-	auto state = ParseState{Finish{}};
+	auto state = ParseState{[]() {
+		Finish state;
+		addExpectationsForSegment(state, Segment::None);
+		return state;
+	}()};
 
 	if (!reporter.hasImpl() && options.errorReporting) {
 		reporter.setImpl([source](const ReportData& log)->void {
@@ -766,29 +811,45 @@ auto Parser::tokenize(shared_ptr<const Source> source)->ParserResult
 
 		auto token = Token{res->type, offset, code.substr(offset, res->length)};
 
-		if (auto fin = get_if<Finish>(&state)) {
-			if (fin->expected) {
-				if (auto error = getExpectedTokenError(*fin->expected, token))
-					return Finish{}.report(*error);
-			}
-		}
-
 		if (res->type != TokenType::WhiteSpace) {
 			if (ts->empty() || res->type != TokenType::EOL || !ts->back().is(TokenType::EOL)) {
 				return std::visit(visitor{
-					[&state](Continue&& newState)->ParseState {
+					[&](Continue&& newState)->ParseState {
 						if (auto cont = get_if<Continue>(&state)) {
 							cont->add(newState.token);
 							return state;
 						}
 						return newState;
 					},
-					[&result, &state, &parserState](Finish&& newState)->ParseState {
-						if (auto cont = get_if<Continue>(&state)) {
-							if (newState.token) cont->add(*newState.token);
-							return parseLine(parserState, move(*cont));
+					[&](Finish&& newState)->ParseState {
+						auto nextState = ([&]()->ParseState {
+							auto parseLineState = ParseState();
+							if (auto cont = get_if<Continue>(&state)) {
+								if (newState.token) cont->add(*newState.token);
+								
+								parseLineState = parseLine(parserState, move(*cont));
+								
+								if (auto parseLineFinished = get_if<Finish>(&parseLineState)) {
+									return newState.merge(*parseLineFinished);
+								}
+								return parseLineState;
+							}
+							return parseLine(parserState, move(newState));
+						})();
+
+						if (auto finish = get_if<Finish>(&nextState)) {
+							if (!finish->expected)
+								addExpectationsForSegment(*finish, parserState.segment);
 						}
-						return parseLine(parserState, move(newState));
+
+						if (auto finish = get_if<Finish>(&state)) {
+							if (finish->expected && !options.testForceTokenization) {
+								if (auto error = getExpectedTokenError(*finish->expected, token))
+									return finish->report(*error);
+							}
+						}
+
+						return nextState;
 					},
 					[](Fatal&& newState)->ParseState {
 						return newState;
