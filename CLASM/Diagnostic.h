@@ -2,6 +2,7 @@
 #include <CLASM/Common.h>
 #include <CLASM/Assembly.h>
 #include <CLASM/Token.h>
+#include <CLASM/Label.h>
 
 namespace CLARA::CLASM {
 	using TokenAndString = pair<TokenType, string>;
@@ -28,6 +29,7 @@ namespace CLARA::CLASM {
 		InvalidEscapeSequence = 2011,          // literal string contained an invalid escape sequence, e.g. \z
 		InvalidHexEscapeSequence = 2011,       // literal string contained an invalid hex escape sequence, e.g. \xGG
 		UnexpectedOperand = 2012,              // more tokens provided than an instruction allows operands for
+		LabelRedefinition = 2013,              // label encountered with a name that was already declared
 	};
 
 	template<DiagCode TCode>
@@ -311,6 +313,17 @@ namespace CLARA::CLASM {
 			}
 
 			return "unexpected additional operand"s;
+		}
+	};
+
+	template<> struct Diagnostic<DiagCode::LabelRedefinition> {
+		constexpr static auto name = "label redefinition";
+
+		const Label& original;
+
+		auto formatMessage() const
+		{
+			return "label already defined on line "s + to_string(original.definition.getLineNumber());
 		}
 	};
 }

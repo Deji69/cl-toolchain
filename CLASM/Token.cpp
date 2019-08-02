@@ -21,7 +21,11 @@ auto getAnnotationSize(const TokenAnnotation& annotation)
 	return 0;
 }
 
-Token::Token(TokenType type, size_t offset, string_view text) : Source::Token(offset, text),
+Token::Token(const Source* source, TokenType type, size_t offset, string_view text) : Source::Token(source, offset, text),
+	type(type)
+{ }
+
+Token::Token(const Source* source, TokenType type, size_t offset, size_t length) : Source::Token(source, offset, length),
 	type(type)
 { }
 
@@ -33,6 +37,18 @@ auto Token::is(TokenType type_) const->bool
 auto Token::is(TokenType type_, string_view value) const->bool
 {
 	return is(type_) && text == value;
+}
+
+auto Token::getLineInfo() const->const Source::LineInfo&
+{
+	auto idx = source->getLineIndexByOffset(offset);
+	return source->getLineInfo(idx);
+}
+
+auto Token::getLineNumber() const->size_t
+{
+	if (!source) return 0;
+	return source->getLineIndexByOffset(offset) + 1;
 }
 
 auto Token::getText() const->string_view

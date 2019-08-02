@@ -36,13 +36,16 @@ struct Token : public Source::Token {
 	TokenAnnotation annotation;
 
 	Token() = default;
-	Token(TokenType type, size_t offset = 0, string_view text = string_view{});
+	Token(const Source* source, TokenType type, size_t offset = 0, string_view text = string_view{});
+	Token(const Source* source, TokenType type, size_t offset, size_t length);
 
 	auto operator=(const Token&)->Token& = default;
 
 	auto is(TokenType type) const->bool;
 	auto is(TokenType type, string_view value) const->bool;
 	auto getText() const->string_view;
+	auto getLineInfo() const->const Source::LineInfo&;
+	auto getLineNumber() const->size_t;
 	auto getAssemblySize() const->size_t;
 };
 

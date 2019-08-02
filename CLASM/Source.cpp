@@ -4,21 +4,24 @@
 using namespace CLARA;
 using namespace CLARA::CLASM;
 
-Source::Token::Token(size_t offset, string_view text) :
-	offset(offset), text(text)
+Source::Token::Token(const Token& first, const Token& last) :
+	source(first.source), offset(first.offset),
+	text(string_view{first.text.data(), last.offset - first.offset + last.text.size()})
 {
-}
-
-Source::Token::Token(const Source& source, size_t offset, size_t length) :
-	offset(offset), text(source.getText(offset, length))
-{
-}
-
-Source::Token::Token(const Token& first, const Token& last)
-{
+	assert(first.source == last.source);
 	assert(last.text.data() >= first.text.data());
-	offset = first.offset;
-	text = string_view{first.text.data(), last.offset - first.offset + last.text.size()};
+}
+
+Source::Token::Token(const Source* source, size_t offset, string_view text) :
+	source(source), offset(offset), text(text)
+{
+	assert(source != nullptr);
+}
+
+Source::Token::Token(const Source* source, size_t offset, size_t length) :
+	source(source), offset(offset), text(source->getText(offset, length))
+{
+	assert(source != nullptr);
 }
 
 Source::Source(string name, string code) : m_name(name), m_code(code)
@@ -124,7 +127,7 @@ auto Source::getToken(size_t from) const->Token
 	auto begin = std::find_if(m_code.c_str() + from, end, std::not_fn(::isspace));
 	auto it = std::find_if(begin, end, ::isspace);
 
-	return Token{*this, static_cast<size_t>(begin - m_code.c_str()), static_cast<size_t>(it - begin)};
+	return Token{this, static_cast<size_t>(begin - m_code.c_str()), static_cast<size_t>(it - begin)};
 }
 
 auto Source::getToken(size_t from, size_t size) const->Token
@@ -137,5 +140,5 @@ auto Source::getToken(size_t from, size_t size) const->Token
 		size = m_code.size() - from;
 	}
 
-	return Token{*this, from, size};
+	return Token{this, from, size};
 }

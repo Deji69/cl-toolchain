@@ -9,13 +9,14 @@ public:
 	struct Token {
 		size_t offset = 0;
 		string_view text;
+		const Source* source = nullptr;
 
 		Token() = default;
 		Token(Token&&) = default;
 		Token(const Token&) = default;
-		Token(size_t offset, string_view);
-		Token(const Source&, size_t offset, size_t length);
 		Token(const Token& first, const Token& last);
+		Token(const Source*, size_t offset, string_view text);
+		Token(const Source*, size_t offset, size_t length);
 		
 		auto operator=(Token&&)->Token& = default;
 		auto operator=(const Token&)->Token& = default;

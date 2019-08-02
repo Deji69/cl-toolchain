@@ -244,7 +244,7 @@ auto parseString(const ParseState&, Token&& token)->ParseState
 				if (res.ec != std::errc{}) {
 					if (!dist) {
 						result.error(
-							Source::Token(token.offset + std::distance(token.text.data(), sv.data()), sv),
+							Source::Token(token.source, token.offset + std::distance(token.text.data(), sv.data()), sv),
 							diagnose<DiagCode::InvalidHexEscapeSequence>(
 								Diagnostic<DiagCode::InvalidHexEscapeSequence>::Problem::NoHexChars
 							)
@@ -257,7 +257,7 @@ auto parseString(const ParseState&, Token&& token)->ParseState
 						seq = seq.substr(0, dist);
 
 						result.error(
-							Source::Token(token.offset + std::distance(token.text.data(), sv.data()) + dist, seq),
+							Source::Token(token.source, token.offset + std::distance(token.text.data(), sv.data()) + dist, seq),
 							diagnose<DiagCode::InvalidHexEscapeSequence>(
 								res.ec == std::errc::result_out_of_range
 								? Diagnostic<DiagCode::InvalidHexEscapeSequence>::Problem::OutOfRange
@@ -363,7 +363,7 @@ auto parseInstructionLine(TokenVec& tokens)->ParseResult
 
 		success.tokens.reserve(static_cast<size_t>(std::abs(std::distance(it, end) + 1)));
 
-		auto& insnToken = success.addToken(TokenType::Instruction, tokens[0].offset, tokens[0].text);
+		auto& insnToken = success.addToken(tokens[0].source, TokenType::Instruction, tokens[0].offset, tokens[0].text.size());
 		insnToken.annotation = instruction;
 
 		auto parseOperand = [&success](OperandType type, const Token& token)->ParseResult {
@@ -442,29 +442,38 @@ auto parseLine(State& parser, Finish&& state)->ParseState
 		return state;
 	}
 
-	auto& token = *state.token;
+	auto token = &*state.token;
 
 	switch (state.token->type) {
 	default: break;
 
 	case TokenType::Identifier:
-		return Finish().error(parser.info.tokens->push(move(token)), diagnose<DiagCode::InvalidIdentifier>());
+		return Finish().error(parser.info.tokens->push(move(*token)), diagnose<DiagCode::InvalidIdentifier>());
 
 	case TokenType::Segment:
-		parser.segment = get<Segment::Type>(token.annotation);
-		parser.info.tokens->push(move(token));
+		parser.segment = get<Segment::Type>(token->annotation);
+		parser.info.tokens->push(move(*token));
 		return Finish().expect(TokenType::EOL);
 
 	case TokenType::Label:
-		parser.info.tokens->push(move(token));
+		{
+			auto name = state.token->text.substr(0, state.token->text.size() - 1);
+			token = &parser.info.tokens->push(move(*token));
+
+			auto res = parser.info.labels.emplace(Label{string(name), *token});
+
+			if (!res.second) {
+				return Finish().error(*token, diagnose<DiagCode::LabelRedefinition>(*res.first));
+			}
+		}
 		return Finish();
 
 	case TokenType::Instruction:
-		parser.info.tokens->push(move(token));
+		parser.info.tokens->push(move(*token));
 		return Finish().expect({TokenType::EOL, make_pair(TokenType::Separator, ","s)});
 	}
 
-	auto& addedToken = parser.info.tokens->push(move(token));
+	auto& addedToken = parser.info.tokens->push(move(*token));
 	return Finish().error(addedToken,diagnose<DiagCode::UnexpectedToken>(addedToken.type));
 }
 
@@ -734,7 +743,7 @@ auto Parser::tokenize(const Options& options, shared_ptr<const Source> source)->
 		return state;
 	}()};
 	auto reporter = ([&]()->Reporter {
-		if (options.reporter.hasImpl() && options.errorReporting) {
+		if (!options.reporter.hasImpl() && options.errorReporting) {
 			Reporter reporter;
 			reporter.setImpl([source](const ReportData& log)->void {
 				using namespace fmt::literals;
@@ -806,7 +815,7 @@ auto Parser::tokenize(const Options& options, shared_ptr<const Source> source)->
 			return Fatal{move(delimitedToken), diagnose<DiagCode::UnexpectedLexeme>()};
 		}
 
-		auto token = Token{res->type, offset, code.substr(offset, res->length)};
+		auto token = Token(source.get(), res->type, offset, res->length);
 
 		if (res->type != TokenType::WhiteSpace) {
 			if (ts->empty() || res->type != TokenType::EOL || !ts->back().is(TokenType::EOL)) {
@@ -899,7 +908,7 @@ auto Parser::tokenize(const Options& options, shared_ptr<const Source> source)->
 			state = reportState(step(state, offset, res));
 		}
 
-		ts->push(TokenType::EOL, offset, code.substr(offset, 0));
+		ts->push(source.get(), TokenType::EOL, offset, code.substr(offset, 0));
 	}
 
 	return result;
