@@ -3,6 +3,7 @@
 #include <CLASM/Common/Imports.h>
 #include <CLASM/Common/Algorithm.h>
 #include <CLASM/Common/String.h>
+#include <CLASM/Common/Literals.h>
 
 namespace CLARA {
 	namespace CLASM {

@@ -150,41 +150,64 @@ using ParseResult = variant<Success, Error>;
 
 struct State {
 	ParseInfo& info;
+	ParseState state;
 	Segment::Type segment = Segment::None;
+	vector<Token*> unresolvedLabelTokens;
+	std::unordered_multimap<string, size_t> unresolvedLabelTokenNameMap;
+
+	auto defineLabel(string name, Token& token)->pair<Label&, bool>
+	{
+		auto idx = info.labels.size();
+		auto res = info.labelMap.emplace(name, idx);
+		auto label = res.second
+			? info.labels.emplace_back(move(make_unique<Label>(Label{name, token}))).get()
+			: info.labels[res.first->second].get();
+		auto range = unresolvedLabelTokenNameMap.equal_range(name);
+		
+		for (auto it = range.first; it != range.second; ++it) {
+			unresolvedLabelTokens[it->second]->annotation.emplace<const Label*>(info.labels[it->second].get());
+		}
+
+		unresolvedLabelTokenNameMap.erase(range.first, range.second);
+		token.annotation.emplace<const Label*>(label);
+		return pair<Label&, bool>(*label, res.second);
+	}
 };
 
-auto parseIdentifier(const ParseState& state, Token&& token)->ParseState
+auto parseIdentifier(const State& state, Token&& token)->ParseState
 {
-	auto id = string{token.text};
+	auto id = string(token.text);
 	
 	if (auto kw = Keyword::fromName(id)) {
 		token.type = TokenType::Keyword;
 		token.annotation.emplace<Keyword::Type>(*kw);
-		return Continue{token};
+		return Continue(token);
 	}
 
 	if (auto mnemonic = Mnemonic::fromName(id)) {
 		token.type = TokenType::Mnemonic;
 		token.annotation.emplace<Mnemonic::Type>(*mnemonic);
-		return Continue{token};
+		return Continue(token);
 	}
 
 	if (auto insn = Instruction::fromName(id)) {
 		token.type = TokenType::Instruction;
 		token.annotation.emplace<Instruction::Type>(*insn);
-		return Continue{token};
+		return Continue(token);
 	}
 
-	if (is<Continue>(state)) {
+	token.annotation.emplace<string>(move(id));
+
+	if (is<Continue>(state.state)) {
 		return Continue(token);
 	}
 
 	return Finish(token);
 }
 
-auto parseSegment(const ParseState& state, Token&& token)->ParseState
+auto parseSegment(const State& state, Token&& token)->ParseState
 {
-	if (is<Continue>(state)) {
+	if (is<Continue>(state.state)) {
 		return Finish().error(token, diagnose<DiagCode::UnexpectedSegmentAfterTokens>());
 	}
 
@@ -198,7 +221,7 @@ auto parseSegment(const ParseState& state, Token&& token)->ParseState
 	return Finish().error(token, diagnose<DiagCode::InvalidSegment>());
 }
 
-auto parseString(const ParseState&, Token&& token)->ParseState
+auto parseString(const State&, Token&& token)->ParseState
 {
 	auto result = Finish{};
 	auto str = string{};
@@ -297,7 +320,7 @@ auto parseString(const ParseState&, Token&& token)->ParseState
 	return result;
 }
 
-auto parseToken(const ParseState& state, Token&& token)->ParseState
+auto parseToken(const State& state, Token&& token)->ParseState
 {
 	switch (token.type) {
 	default: break;
@@ -306,6 +329,9 @@ auto parseToken(const ParseState& state, Token&& token)->ParseState
 	case TokenType::Segment: return parseSegment(state, forward<Token>(token));
 	case TokenType::String: return parseString(state, forward<Token>(token));
 	case TokenType::Label:
+		if (is<Continue>(state.state)) {
+			return Finish().error(forward<Token>(token), diagnose<DiagCode::UnexpectedLabelAfterTokens>());
+		}
 	case TokenType::Numeric:
 		return Finish(forward<Token>(token));
 	case TokenType::Separator:
@@ -335,6 +361,9 @@ auto checkOperandType(OperandType type, const Token& token)->ParseResult
 		break;
 
 	case OperandType::REL32:
+		if (token.type != TokenType::Label)
+			return Error{token, diagnose<DiagCode::InvalidOperandType>(type)};
+		break;
 
 	case OperandType::V16:
 	case OperandType::V32:
@@ -352,7 +381,7 @@ auto checkOperandType(OperandType type, const Token& token)->ParseResult
 	return Success{};
 }
 
-auto parseInstructionLine(TokenVec& tokens)->ParseResult
+auto parseInstructionLine(State& state, TokenVec& tokens)->ParseResult
 {
 	auto parseLine = [&](Instruction::Type instruction)->ParseResult {
 		auto success = Success{};
@@ -366,14 +395,29 @@ auto parseInstructionLine(TokenVec& tokens)->ParseResult
 		auto& insnToken = success.addToken(tokens[0].source, TokenType::Instruction, tokens[0].offset, tokens[0].text.size());
 		insnToken.annotation = instruction;
 
-		auto parseOperand = [&success](OperandType type, const Token& token)->ParseResult {
+		auto parseOperand = [&state, &success](OperandType type, Token token)->ParseResult {
+			if (token.type == TokenType::Identifier) {
+				switch (type) {
+				default: break;
+				case OperandType::REL32:
+					{
+						token.type = TokenType::Label;
+						auto it = state.info.labelMap.find(string(token.text));
+						if (it != state.info.labelMap.end()) {
+							token.annotation.emplace<const Label*>(state.info.labels[it->second].get());
+						}
+					}
+					break;
+				}
+			}
+
 			auto res = checkOperandType(type, token);
 
 			if (is<Error>(res)) {
 				return get<Error>(res);
 			}
 
-			success.tokens.emplace_back(token);
+			success.tokens.emplace_back(move(token));
 			return Success{};
 		};
 
@@ -417,7 +461,7 @@ auto parseInstructionLine(TokenVec& tokens)->ParseResult
 			return Error{token, diagnose<DiagCode::UnexpectedOperand>(it->type, numExpected, numProvided)};
 		}
 
-		return move(success);
+		return success;
 	};
 
 	if (tokens[0].type == TokenType::Mnemonic) {
@@ -457,13 +501,13 @@ auto parseLine(State& parser, Finish&& state)->ParseState
 
 	case TokenType::Label:
 		{
-			auto name = state.token->text.substr(0, state.token->text.size() - 1);
+			auto name = string(state.token->text.substr(0, state.token->text.size() - 1));
 			token = &parser.info.tokens->push(move(*token));
 
-			auto res = parser.info.labels.emplace(Label{string(name), *token});
+			auto res = parser.defineLabel(name, *token);
 
 			if (!res.second) {
-				return Finish().error(*token, diagnose<DiagCode::LabelRedefinition>(*res.first));
+				return Finish().error(*token, diagnose<DiagCode::LabelRedefinition>(res.first));
 			}
 		}
 		return Finish();
@@ -486,14 +530,19 @@ auto parseLine(State& parser, Continue&& state)->ParseState
 		case TokenType::Mnemonic:
 		case TokenType::Instruction:
 			{
-				auto res = parseInstructionLine(tokens);
+				auto res = parseInstructionLine(parser, tokens);
 				
 				if (is<Error>(res)) {
 					return Finish().error(tokens[0], move(get<Error>(res).info));
 				}
 
 				for (auto& token : get<Success>(res).tokens) {
-					parser.info.tokens->push(token);
+					auto& addedToken = parser.info.tokens->push(move(token));
+
+					if (addedToken.type == TokenType::Label && !is<const Label*>(addedToken.annotation)) {
+						parser.unresolvedLabelTokenNameMap.emplace(get<string>(addedToken.annotation), parser.unresolvedLabelTokens.size());
+						parser.unresolvedLabelTokens.push_back(&addedToken);
+					}
 				}
 			}
 			return Finish().expect({TokenType::EOL, make_pair(TokenType::Separator, ","s)});
@@ -510,6 +559,24 @@ auto parseLine(State& parser, Continue&& state)->ParseState
 		}
 	}
 	return Finish();
+}
+
+auto parseFinish(State& state)->ParseState
+{
+	auto fin = Finish();
+
+	if (!state.unresolvedLabelTokens.empty()) {
+		for (size_t i = 0; i < state.unresolvedLabelTokenNameMap.bucket_count(); ++i) {
+			auto it = state.unresolvedLabelTokenNameMap.begin(i);
+			if (it == state.unresolvedLabelTokenNameMap.end(i))
+				continue;
+			auto& elem = *state.unresolvedLabelTokenNameMap.begin(i);
+			auto token = state.unresolvedLabelTokens[elem.second];
+			fin.error(*token, diagnose<DiagCode::UnresolvedLabelReference>());
+		}
+	}
+
+	return fin;
 }
 
 auto lexComment(const char* str, size_t len)
@@ -574,7 +641,7 @@ auto lexLabel(const char* str, size_t len)
 {
 	if (auto res = lexIdentifier(str, len)) {
 		if (str[res] == ':') {
-			if (lexWhitespace(str + res + 1, len - res - 1)) {
+			if (str[res + 1] == '\0' || std::isspace(str[res + 1])) {
 				return res + 1;
 			}
 		}
@@ -734,14 +801,16 @@ auto Parser::tokenize(const Options& options, shared_ptr<const Source> source)->
 	
 	auto ts = make_shared<TokenStream>(source);
 	auto result = Result{ts};
-	auto info = ParseInfo{ts};
-	auto parserState = State{info};
+	auto parserState = State{result.info};
 
-	auto state = ParseState{[]() {
+	parserState.state = ParseState{[]() {
 		Finish state;
 		addExpectationsForSegment(state, Segment::None);
 		return state;
 	}()};
+	
+	parserState.unresolvedLabelTokens.reserve(100);
+
 	auto reporter = ([&]()->Reporter {
 		if (!options.reporter.hasImpl() && options.errorReporting) {
 			Reporter reporter;
@@ -860,7 +929,7 @@ auto Parser::tokenize(const Options& options, shared_ptr<const Source> source)->
 					[](Fatal&& newState)->ParseState {
 						return newState;
 					}
-				}, parseToken(state, move(token)));
+				}, parseToken(parserState, move(token)));
 			}
 		}
 
@@ -895,7 +964,7 @@ auto Parser::tokenize(const Options& options, shared_ptr<const Source> source)->
 
 	while (offset < code.size()) {
 		auto res = lexOneOf(code.substr(offset), lexRules);
-		state = reportState(step(state, offset, res));
+		parserState.state = reportState(step(parserState.state, offset, res));
 
 		if (result.hadFatal) break;
 
@@ -905,11 +974,13 @@ auto Parser::tokenize(const Options& options, shared_ptr<const Source> source)->
 	if (ts->empty() || !ts->back().is(TokenType::EOL)) {
 		if (!result.hadFatal) {
 			auto res = LexResult{TokenType::EOL, 0};
-			state = reportState(step(state, offset, res));
+			parserState.state = reportState(step(parserState.state, offset, res));
 		}
 
 		ts->push(source.get(), TokenType::EOL, offset, code.substr(offset, 0));
 	}
+
+	parserState.state = reportState(parseFinish(parserState));
 
 	return result;
 }

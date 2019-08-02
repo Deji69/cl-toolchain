@@ -49,7 +49,7 @@ struct ParsingTestHelper {
 		auto res = parse(code);
 		tokensPtr = res.info.tokens;
 		REQUIRE(tokensPtr->size() >= types.size());
-		auto i = size_t{0};
+		auto i = 0_uz;
 		for (auto type : types) {
 			REQUIRE((*tokensPtr)[i++].type == type);
 		}
@@ -241,7 +241,44 @@ TEST_CASE("Parser parses labels", "[Parser]")
 	SECTION("Labels can be defined")
 	{
 		auto res = helper.parse(".code\nlabel:");
+		auto& tokens = *res.info.tokens;
+		auto& labels = res.info.labels;
+		auto& labelMap = res.info.labelMap;
+		REQUIRE(tokens.size() == 3);
+		auto& labelToken = tokens[1];
+		REQUIRE(labelToken.is(TokenType::Label, "label:"));
+		CHECK(is<const Label*>(labelToken.annotation));
+		auto it = labelMap.find("label");
+		REQUIRE(it != labelMap.end());
+		REQUIRE(it->second < labels.size());
+		auto label = labels[it->second].get();
+		CHECK(label == get<const Label*>(labelToken.annotation));
+		CHECK(label->name == "label");
+		CHECK(&label->definition == &labelToken);
+	}
+
+	SECTION("Labels can be referenced")
+	{
+		auto res = helper.parse(".code\nlabel: jmp label");
 		REQUIRE(checkResult(res));
+		auto& tokens = *res.info.tokens;
+		REQUIRE(tokens.size() == 5);
+		REQUIRE(is<const Label*>(tokens[3].annotation));
+		auto ref = get<const Label*>(tokens[3].annotation);
+		REQUIRE(ref == res.info.labels[0].get());
+		REQUIRE(ref == get<const Label*>(tokens[1].annotation));
+	}
+
+	SECTION("Labels can be defined after referencing")
+	{
+		auto res = helper.parse(".code\njmp label\nlabel:");
+		REQUIRE(checkResult(res));
+		auto& tokens = *res.info.tokens;
+		REQUIRE(tokens.size() == 5);
+		REQUIRE(is<const Label*>(tokens[2].annotation));
+		REQUIRE(is<const Label*>(tokens[3].annotation));
+		auto ref = get<const Label*>(tokens[2].annotation);
+		REQUIRE(ref == get<const Label*>(tokens[3].annotation));
 	}
 }
 
@@ -282,7 +319,7 @@ TEST_CASE("Error unexpected label after tokens", "[Error Handling]")
 	// parser picks up 'label' as an identifier (possible label pointer) and then errors on the ':' - this is ok?
 	auto res = lexerHelper.parse(".code\nnop label:");
 	REQUIRE(res.numErrors >= 1);
-	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::UnexpectedSeparator);
+	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::UnexpectedLabelAfterTokens);
 }
 
 TEST_CASE("Error invalid identifier", "[Error Handling]")
@@ -312,4 +349,16 @@ TEST_CASE("Error instruction invalid operand type", "[Error Handling]")
 	auto res = lexerHelper.parse("pushb \"str\"");
 	REQUIRE(res.numErrors == 1);
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::InvalidOperandType);
+}
+
+TEST_CASE("Error undefined label", "[Error Handling]")
+{
+	auto res = helper.parse(".code\njmp label");
+	REQUIRE(res.numErrors >= 1);
+	auto& tokens = *res.info.tokens;
+	REQUIRE(tokens.size() >= 3);
+	REQUIRE(tokens[2].type == TokenType::Label);
+	REQUIRE(is<string>(tokens[2].annotation));
+	CHECK(get<string>(tokens[2].annotation) == "label");
+	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::UnresolvedLabelReference);
 }

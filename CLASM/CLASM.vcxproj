@@ -86,7 +86,7 @@
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Label="LLVM" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <ClangClAdditionalOptions>-Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-newline-eof -Wno-documentation -Wno-documentation-unknown-command -Wno-shadow-field-in-constructor -Wno-exit-time-destructors -Wno-global-constructors -Wno-shadow-uncaptured-local -Wno-switch-enum -Wno-undefined-func-template -Wno-nonportable-system-include-path -Wno-missing-prototypes -Wno-implicit-fallthrough -Wno-missing-field-initializers -Wshadow-field</ClangClAdditionalOptions>
+    <ClangClAdditionalOptions>-Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-newline-eof -Wno-documentation -Wno-documentation-unknown-command -Wno-shadow-field-in-constructor -Wno-exit-time-destructors -Wno-global-constructors -Wno-shadow-uncaptured-local -Wno-switch-enum -Wno-undefined-func-template -Wno-nonportable-system-include-path -Wno-missing-prototypes -Wno-implicit-fallthrough -Wno-missing-field-initializers -Wshadow-field -D_SILENCE_CXX17_RESULT_OF_DEPRECATION_WARNING</ClangClAdditionalOptions>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -186,10 +186,12 @@
     <ClInclude Include="Common.h" />
     <ClInclude Include="Common\File.h" />
     <ClInclude Include="Common\Imports.h" />
+    <ClInclude Include="Common\Literals.h" />
     <ClInclude Include="Common\Macros.h" />
     <ClInclude Include="Common\Algorithm.h" />
     <ClInclude Include="Common\String.h" />
     <ClInclude Include="Compiler.h" />
+    <ClInclude Include="Data.h" />
     <ClInclude Include="Diagnostic.h" />
     <ClInclude Include="IBinaryOutput.h" />
     <ClInclude Include="Label.h" />

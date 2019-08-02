@@ -30,7 +30,8 @@ struct Report {
 
 struct ParseInfo {
 	shared_ptr<TokenStream> tokens;
-	unordered_set<Label, LabelNameHash, LabelNameEq> labels;
+	vector<unique_ptr<Label>> labels;
+	unordered_map<string, size_t> labelMap;
 };
 
 struct Result {

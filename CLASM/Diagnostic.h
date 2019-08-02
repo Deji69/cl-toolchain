@@ -19,17 +19,19 @@ namespace CLARA::CLASM {
 		ExpectedToken = 2001,                  // the parser encountered a token of the wrong type while expecting another one, or one of many
 		UnexpectedToken = 2002,                // the parser is totally incapable of doing anything with this token here
 		UnexpectedSeparator = 2003,            // a separator occurred in an invalid location
-		UnexpectedSegmentAfterTokens = 2004,   // segment occurred after other tokens
-		InvalidIdentifier = 2005,              // identifier token could not be resolved to anything
-		InvalidSegment = 2006,                 // segment token name is unrecognized
-		InvalidOperandType = 2007,             // the wrong type of literal was passed for an operand
-		InvalidMnemonicOperands = 2008,        // no instruction for the mnemonic has a matching series of operands
-		MissingOperand = 2009,                 // another operand was required but the parser ran out of tokens
-		LiteralValueSizeOverflow = 2010,       // a literal value was supplied that exceeds the bit size of the accepted operand
-		InvalidEscapeSequence = 2011,          // literal string contained an invalid escape sequence, e.g. \z
-		InvalidHexEscapeSequence = 2011,       // literal string contained an invalid hex escape sequence, e.g. \xGG
-		UnexpectedOperand = 2012,              // more tokens provided than an instruction allows operands for
-		LabelRedefinition = 2013,              // label encountered with a name that was already declared
+		UnexpectedSegmentAfterTokens = 2004,   // segment was not the first token on a line
+		UnexpectedLabelAfterTokens = 2005,     // label was not the first token on a line
+		UnexpectedOperand = 2006,              // more tokens provided than an instruction allows operands for
+		InvalidIdentifier = 2010,              // identifier token could not be resolved to anything
+		InvalidSegment = 2011,                 // segment token name is unrecognized
+		InvalidOperandType = 2012,             // the wrong type of literal was passed for an operand
+		InvalidMnemonicOperands = 2013,        // no instruction for the mnemonic has a matching series of operands
+		MissingOperand = 2014,                 // another operand was required but the parser ran out of tokens
+		LiteralValueSizeOverflow = 2015,       // a literal value was supplied that exceeds the bit size of the accepted operand
+		InvalidEscapeSequence = 2016,          // literal string contained an invalid escape sequence, e.g. \z
+		InvalidHexEscapeSequence = 2017,       // literal string contained an invalid hex escape sequence, e.g. \xGG
+		LabelRedefinition = 2018,              // label encountered with a name that was already declared
+		UnresolvedLabelReference = 2019,       // label reference with the label never defined
 	};
 
 	template<DiagCode TCode>
@@ -204,6 +206,15 @@ namespace CLARA::CLASM {
 		}
 	};
 
+	template<> struct Diagnostic<DiagCode::UnexpectedLabelAfterTokens> {
+		constexpr static auto name = "unexpected label"sv;
+
+		auto formatMessage() const
+		{
+			return "label should be the first token of a line"s;
+		}
+	};
+
 	template<> struct Diagnostic<DiagCode::InvalidIdentifier> {
 		constexpr static auto name = "invalid identifier";
 
@@ -324,6 +335,15 @@ namespace CLARA::CLASM {
 		auto formatMessage() const
 		{
 			return "label already defined on line "s + to_string(original.definition.getLineNumber());
+		}
+	};
+
+	template<> struct Diagnostic<DiagCode::UnresolvedLabelReference> {
+		constexpr static auto name = "unresolved label reference";
+
+		auto formatMessage() const
+		{
+			return "no label with this name is defined"s;
 		}
 	};
 }

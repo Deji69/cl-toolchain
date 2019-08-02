@@ -1,9 +1,6 @@
 #include <CLASM/pch.h>
 #include <CLASM/Common/String.h>
 #include <cctype>
-#ifdef _MSC_VER
-#include <windows.h>
-#endif
 
 namespace CLARA {
 

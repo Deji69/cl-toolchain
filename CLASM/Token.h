@@ -5,6 +5,8 @@
 
 namespace CLARA::CLASM {
 
+struct Label;
+
 enum class TokenType {
 	EOL,
 	WhiteSpace,
@@ -18,6 +20,7 @@ enum class TokenType {
 	Instruction,
 	Numeric,
 	String,
+	DataDefinition,
 };
 
 using TokenAnnotation = variant<
@@ -25,6 +28,7 @@ using TokenAnnotation = variant<
 	uint8_t, int8_t, uint16_t, int16_t, uint32_t, int32_t, uint64_t, int64_t,
 	float, double,
 	string,
+	const Label*,
 	Keyword::Type,
 	Segment::Type,
 	Mnemonic::Type,

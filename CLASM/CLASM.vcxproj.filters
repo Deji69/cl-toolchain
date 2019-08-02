@@ -87,6 +87,12 @@
     <ClInclude Include="Label.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="Data.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\Literals.h">
+      <Filter>src\Common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
