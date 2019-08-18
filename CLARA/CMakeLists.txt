@@ -16,8 +16,39 @@ set(CLARA_SOURCE_DIR   "${PROJECT_SOURCE_DIR}/src/")
 find_package(fmt CONFIG REQUIRED)
 
 ## Target
-file(GLOB_RECURSE CLARA_HEADERS CONFIGURE_DEPENDS "${CLARA_INCLUDE_DIR}/*.h")
-file(GLOB_RECURSE CLARA_SOURCES CONFIGURE_DEPENDS "${CLARA_SOURCE_DIR}/*.cpp")
+set(CLARA_HEADERS
+	"${CLARA_INCLUDE_DIR}/CLARA/Common/Algorithm.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Common/File.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Common/Imports.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Common/Literals.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Common/Macros.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Common/String.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Common/Vector.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Assembly.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Common.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Compiler.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Data.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Diagnostic.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/IBinaryOutput.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Label.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Parser.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/pch.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Progress.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Reporter.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Source.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/System.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/Token.h"
+	"${CLARA_INCLUDE_DIR}/CLARA/TokenStream.h"
+)
+set(CLARA_SOURCES
+	"${CLARA_SOURCE_DIR}/Common/String.cpp"
+	"${CLARA_SOURCE_DIR}/Assembly.cpp"
+	"${CLARA_SOURCE_DIR}/Compiler.cpp"
+	"${CLARA_SOURCE_DIR}/Parser.cpp"
+	"${CLARA_SOURCE_DIR}/pch.cpp"
+	"${CLARA_SOURCE_DIR}/Source.cpp"
+	"${CLARA_SOURCE_DIR}/Token.cpp"
+)
 add_library(${CLARA_TARGET_NAME} STATIC)
 target_sources(${CLARA_TARGET_NAME} PUBLIC ${CLARA_HEADERS} PRIVATE ${CLARA_SOURCES})
 target_compile_features(${CLARA_TARGET_NAME} PUBLIC cxx_std_17)
