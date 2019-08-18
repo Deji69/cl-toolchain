@@ -178,16 +178,31 @@ TEST_CASE("Lexer tokenizes separated instructions", "[Lexer]")
 
 TEST_CASE("Lexer tokenizes numerics", "[Lexer]")
 {
-	auto& tokens = lexerHelper.parseExpect("123 3.14 -12 -12.4 1.e-4", {
-		TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
-		TokenType::Numeric, TokenType::Numeric
-	});
-
-	CHECK(tokens[0].text == "123");
-	CHECK(tokens[1].text == "3.14");
-	CHECK(tokens[2].text == "-12");
-	CHECK(tokens[3].text == "-12.4");
-	CHECK(tokens[4].text == "1.e-4");
+	SECTION("tokenizes decimals") {
+		auto& tokens = lexerHelper.parseExpect("123 3.14 -12 -12.4 1.e-4", {
+			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
+			TokenType::Numeric, TokenType::Numeric
+		});
+		
+		CHECK(tokens[0].text == "123");
+		CHECK(tokens[1].text == "3.14");
+		CHECK(tokens[2].text == "-12");
+		CHECK(tokens[3].text == "-12.4");
+		CHECK(tokens[4].text == "1.e-4");
+	}
+	
+	SECTION("tokenizes hexadecimals") {
+		auto& tokens = lexerHelper.parseExpect("0x0 0x1 0x10 0xFF 0x100", {
+			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
+			TokenType::Numeric, TokenType::Numeric
+		});
+		
+		CHECK(tokens[0].text == "0x0");
+		CHECK(tokens[1].text == "0x1");
+		CHECK(tokens[2].text == "0x10");
+		CHECK(tokens[3].text == "0xFF");
+		CHECK(tokens[4].text == "0x100");
+	}
 }
 
 TEST_CASE("Lexer tokenizes strings", "[Lexer]")
@@ -197,42 +212,63 @@ TEST_CASE("Lexer tokenizes strings", "[Lexer]")
 	});
 }
 
-TEST_CASE("Parser parses strings with hex escape sequences", "[Parser]")
-{
-	SECTION("parses a single byte hex pair")
-	{
+TEST_CASE("Parser parses strings with hex escape sequences", "[Parser]") {
+	SECTION("parses a single byte hex pair") {
 		auto& tokens = helper.parseExpect("\"\\x41\"", {TokenType::String});
 		REQUIRE(get<string>(tokens[0].annotation) == "A");
 	}
 	
-	SECTION("parses a single byte hex digit")
-	{
+	SECTION("parses a single byte hex digit") {
 		auto& tokens = helper.parseExpect("\"\\x9\"", {TokenType::String});
 		REQUIRE(get<string>(tokens[0].annotation) == "\x09");
 	}
 	
-	SECTION("parses a two byte hex sequence")
-	{
+	SECTION("parses a two byte hex sequence") {
 		auto& tokens = helper.parseExpect("\"\\x4142\"", {TokenType::String});
 		REQUIRE(get<string>(tokens[0].annotation) == "AB");
 	}
 	
-	SECTION("parses a three byte hex sequence")
-	{
+	SECTION("parses a three byte hex sequence") {
 		auto& tokens = helper.parseExpect("\"\\x414243\"", {TokenType::String});
 		REQUIRE(get<string>(tokens[0].annotation) == "ABC");
 	}
 	
-	SECTION("parses a four byte hex sequence")
-	{
+	SECTION("parses a four byte hex sequence") {
 		auto& tokens = helper.parseExpect("\"\\x41424344\"", {TokenType::String});
 		REQUIRE(get<string>(tokens[0].annotation) == "ABCD");
 	}
 
-	SECTION("parsing stops at backslash to prevent interpreting extra characters as bytes")
-	{
+	SECTION("parsing stops at backslash to prevent interpreting extra characters as bytes") {
 		auto& tokens = helper.parseExpect("\"\\x4142\\CD\"", {TokenType::String});
 		REQUIRE(get<string>(tokens[0].annotation) == "ABCD");
+	}
+}
+
+TEST_CASE("Parser parses numerics", "[Parser]") {
+	SECTION("parses decimals") {
+		auto& tokens = lexerHelper.parseExpect("123 3.14 -12 -12.4 1.e-4", {
+			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
+			TokenType::Numeric, TokenType::Numeric
+		});
+		
+		CHECK(tokens[0].text == "123");
+		CHECK(tokens[1].text == "3.14");
+		CHECK(tokens[2].text == "-12");
+		CHECK(tokens[3].text == "-12.4");
+		CHECK(tokens[4].text == "1.e-4");
+	}
+	
+	SECTION("tokenizes hexadecimals") {
+		auto& tokens = lexerHelper.parseExpect("0x0 0x1 0x10 0xFF 0x100", {
+			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
+			TokenType::Numeric, TokenType::Numeric
+		});
+		
+		CHECK(tokens[0].text == "0x0");
+		CHECK(tokens[1].text == "0x1");
+		CHECK(tokens[2].text == "0x10");
+		CHECK(tokens[3].text == "0xFF");
+		CHECK(tokens[4].text == "0x100");
 	}
 }
 
@@ -280,6 +316,12 @@ TEST_CASE("Parser parses labels", "[Parser]")
 		auto ref = get<const Label*>(tokens[2].annotation);
 		REQUIRE(ref == get<const Label*>(tokens[3].annotation));
 	}
+}
+
+TEST_CASE("Parser resolves mnemonics", "[Parser]")
+{
+	auto res = helper.parse(".code\npush 0xFF\npush 0x100");
+	REQUIRE(checkResult(res));
 }
 
 TEST_CASE("Error unexpected lexeme", "[Error Handling]")

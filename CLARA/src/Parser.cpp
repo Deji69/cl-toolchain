@@ -9,7 +9,7 @@ using TokenVec = vector<Token>;
 
 struct LexRule {
 	TokenType type;
-	function<size_t(const char*, size_t)> func;
+	size_t(*func)(string_view);
 };
 
 struct LexResult {
@@ -635,92 +635,102 @@ auto parseFinish(State& state)->ParseState
 	return fin;
 }
 
-auto lexComment(const char* str, size_t len)
+auto lexComment(string_view sv)
 {
-	if (str[0] == ';') {
-		auto it = std::find(str + 1, str + len, '\n');
-		if (it < (str + len)) {
-			return static_cast<size_t>(std::distance(str, it));
-		}
+	if (sv[0] == ';') {
+		auto pos = sv.find('\n', 1);
+		if (pos != sv.npos) return pos;
 	}
 	return 0_uz;
 }
 
-auto lexWhitespace(const char* str, size_t len)
+auto lexWhitespace(string_view sv)
 {
-	auto it = std::find_if_not(str, str + len, [](char c) {
-		return std::isspace(c);
+	auto it = std::find_if_not(sv.cbegin(), sv.cend(), [](auto c) {
+		return std::isspace(static_cast<unsigned char>(c));
 	});
-	return static_cast<size_t>(std::distance(str, it));
+	return static_cast<size_t>(std::distance(sv.cbegin(), it));
 }
 
-auto lexWhitespaceNoNewlines(const char* str, size_t len)
+auto lexWhitespaceNoNewlines(string_view sv)
 {
-	auto it = std::find_if_not(str, str + len, [](char c) {
-		return c != '\n' && std::isspace(c);
+	auto it = std::find_if_not(sv.cbegin(), sv.cend(), [](auto c) {
+		return c != '\n' && std::isspace(static_cast<unsigned char>(c));
 	});
-	return static_cast<size_t>(std::distance(str, it));
+	return static_cast<size_t>(std::distance(sv.cbegin(), it));
 }
 
-auto lexNewline(const char* str, size_t len)
+auto lexNewline(string_view sv)
 {
-	auto it = std::find_if_not(str, str + len, [](char c) {
+	auto it = std::find_if_not(sv.cbegin(), sv.cend(), [](auto c) {
 		return c == '\n';
 	});
-	return static_cast<size_t>(std::distance(str, it));
+	return static_cast<size_t>(std::distance(sv.cbegin(), it));
 }
 
-auto lexIdentifier(const char* str, size_t len)
+auto lexIdentifier(string_view sv)
 {
-	if (std::isalpha(str[0]) || str[0] == '_') {
-		auto it = std::find_if_not(str + 1, str + len, [](char c) {
+	if ((std::isalpha(sv[0]) || sv[0] == '_') && sv.size() > 1) {
+		auto it = std::find_if_not(sv.cbegin() + 1, sv.cend(), [](auto c) {
 			return c == '_' || std::isalnum(c);
 		});
-		if (it != str) {
-			return static_cast<size_t>(std::distance(str, it));
-		}
+		if (it == sv.cend())
+			return sv.size();
+		return static_cast<size_t>(std::distance(sv.cbegin(), it));
 	}
 	return 0_uz;
 }
 
-auto lexSegment(const char* str, size_t len)
+auto lexSegment(string_view sv)
 {
-	if (str[0] == '.') {
-		if (auto res = lexIdentifier(str + 1, len - 1)) {
+	if (sv[0] == '.') {
+		if (auto res = lexIdentifier(sv.substr(1))) {
 			return static_cast<size_t>(res) + 1;
 		}
 	}
 	return 0_uz;
 }
 
-auto lexLabel(const char* str, size_t len)
+auto lexLabel(string_view sv)
 {
-	if (auto res = lexIdentifier(str, len)) {
-		if (str[res] == ':') {
-			if (str[res + 1] == '\0' || std::isspace(str[res + 1])) {
-				return res + 1;
-			}
+	if (auto res = lexIdentifier(sv)) {
+		if (res < sv.size() && sv[res] == ':') {
+			++res;
+			if (res == sv.size() || std::isspace(sv[res]))
+				return res;
 		}
 	}
 	return 0_uz;
 }
 
-auto lexNumeric(const char* str, size_t)
+auto lexNumeric(string_view sv)
 {
 	static std::regex numberRegex{"^[+\\-]?(?:0|[1-9]\\d*)(?:\\.\\d*)?(?:[eE][+\\-]?\\d+)?\\b"};
+	static std::regex hexRegex("^([\\dA-Fa-f]+)\\b");
+	
+	auto s = string(sv);
 	std::smatch sm;
-	auto s = string{str};
+	
+	if (sv.size() > 2 && sv[0] == '0') {
+		if (sv[1] == 'x') {
+			s = s.substr(2);
+			if (std::regex_search(s, sm, hexRegex)) {
+				return static_cast<size_t>(sm[0].length() + 2);
+			}
+			return 0_uz;
+		}
+	}
+	
 	if (std::regex_search(s, sm, numberRegex)) {
 		return static_cast<size_t>(sm[0].length());
 	}
 	return 0_uz;
 }
 
-auto lexString(const char* str, size_t len)
+auto lexString(string_view sv)
 {
-	if (str[0] == '"') {
+	if (sv[0] == '"') {
 		size_t end = 0;
-		auto sv = string_view{str, len};
 
 		for (auto pos = sv.find('"', 1); pos != sv.npos; pos = sv.find('"', pos + 1)) {
 			auto rpos = pos - 1;
@@ -744,9 +754,9 @@ auto lexString(const char* str, size_t len)
 	return 0_uz;
 }
 
-auto lexSeparator(const char* str, size_t)
+auto lexSeparator(string_view sv)
 {
-	switch (*str) {
+	switch (sv[0]) {
 	case '=':
 	case ':':
 	case ',':
@@ -757,7 +767,7 @@ auto lexSeparator(const char* str, size_t)
 
 auto lexOne(string_view sv, LexRule rule)->optional<LexResult>
 {
-	if (auto len = rule.func(sv.data(), sv.size()))
+	if (auto len = rule.func(sv))
 		return make_optional<LexResult>(rule.type, len);
 	return nullopt;
 }
