@@ -332,6 +332,79 @@ auto parseString(const State&, Token&& token)->ParseState
 	return result;
 }
 
+auto resolveIntegerAnnotation(Token& token, uint64_t num, bool negative)->TokenAnnotation
+{
+	if (!negative) {
+		if (num <= static_cast<uint8>(std::numeric_limits<int8>::max()))
+			return static_cast<int8>(num);
+		else if (num <= std::numeric_limits<uint8>::max())
+			return static_cast<uint8>(num);
+		else if (num <= static_cast<uint16>(std::numeric_limits<int16>::max()))
+			return static_cast<int16>(num);
+		else if (num <= std::numeric_limits<uint16>::max())
+			return static_cast<uint16>(num);
+		else if (num <= static_cast<uint32>(std::numeric_limits<int32>::max()))
+			return static_cast<int32>(num);
+		else if (num <= std::numeric_limits<uint32>::max())
+			return static_cast<uint32>(num);
+		else if (num <= static_cast<uint64>(std::numeric_limits<int64>::max()))
+			return static_cast<int64>(num);
+		else if (num <= std::numeric_limits<uint64>::max())
+			return static_cast<uint64>(num);
+	}
+	else {
+		if (num <= static_cast<uint8>(std::numeric_limits<int8>::max()))
+			return static_cast<int8>(-static_cast<int8>(num));
+		else if (num <= std::numeric_limits<uint8>::max())
+			return static_cast<int16>(-static_cast<int16>(num));
+		else if (num <= static_cast<uint16>(std::numeric_limits<int16>::max()))
+			return static_cast<int16>(-static_cast<int16>(num));
+		else if (num <= std::numeric_limits<uint16>::max())
+			return static_cast<int32>(-static_cast<int32>(num));
+		else if (num <= static_cast<uint32>(std::numeric_limits<int32>::max()))
+			return static_cast<int32>(-static_cast<int32>(num));
+		else if (num <= std::numeric_limits<uint32>::max())
+			return static_cast<int64>(-static_cast<int64>(num));
+		else if (num <= static_cast<uint64>(std::numeric_limits<int64>::max()))
+			return static_cast<int64>(-static_cast<int64>(num));
+	}
+	return TokenAnnotation{};
+}
+
+auto parseNumeric(const State&, Token&& token)->ParseState
+{
+	Finish result;
+	auto literal = token.text;
+	auto negative = literal[0] == '-';
+	
+	if (negative || literal[0] == '+')
+		literal = literal.substr(1);
+	
+	if (token.type == TokenType::HexLiteral) {
+		if (auto num = stringToInt<uint64_t>(literal.substr(2), 16)) {
+			token.annotation = resolveIntegerAnnotation(token, *num, negative);
+		}
+	}
+	else if (token.type == TokenType::IntegerLiteral) {
+		if (auto num = stringToInt<uint64_t>(literal, 10)) {
+			token.annotation = resolveIntegerAnnotation(token, *num, negative);
+		}
+	}
+	else if (token.type == TokenType::FloatLiteral) {
+		if (auto num = stringToFloat(token.text)) {
+			token.annotation = *num;
+		}
+	}
+	
+	if (is<monostate>(token.annotation)) {
+		result.error(token, diagnose<DiagCode::InvalidNumericLiteral>());
+	}
+	
+	token.type = TokenType::Numeric;
+	result.token = move(token);
+	return result;
+}
+
 auto parseToken(const State& state, Token&& token)->ParseState
 {
 	switch (token.type) {
@@ -340,11 +413,14 @@ auto parseToken(const State& state, Token&& token)->ParseState
 	case TokenType::Identifier: return parseIdentifier(state, forward<Token>(token));
 	case TokenType::Segment: return parseSegment(state, forward<Token>(token));
 	case TokenType::String: return parseString(state, forward<Token>(token));
+	case TokenType::HexLiteral:
+	case TokenType::FloatLiteral:
+	case TokenType::IntegerLiteral:
+		return parseNumeric(state, forward<Token>(token));
 	case TokenType::Label:
 		if (is<Continue>(state.state)) {
 			return Finish().error(forward<Token>(token), diagnose<DiagCode::UnexpectedLabelAfterTokens>());
 		}
-	case TokenType::Numeric:
 		return Finish(forward<Token>(token));
 	case TokenType::Separator:
 		if (token.text == ",") {
@@ -368,7 +444,7 @@ auto checkOperandType(OperandType type, const Token& token)->ParseResult
 		if (is<int64_t>(token.annotation) || is<uint64_t>(token.annotation))
 			return Error{token, diagnose<DiagCode::LiteralValueSizeOverflow>(type)};
 	case OperandType::IMM64:
-		if (token.type != TokenType::Numeric)
+		if (!token.is(TokenType::Numeric))
 			return Error{token, diagnose<DiagCode::InvalidOperandType>(type)};
 		break;
 
@@ -703,25 +779,37 @@ auto lexLabel(string_view sv)
 	return 0_uz;
 }
 
-auto lexNumeric(string_view sv)
+auto lexHexLiteral(string_view sv)
 {
-	static std::regex numberRegex{"^[+\\-]?(?:0|[1-9]\\d*)(?:\\.\\d*)?(?:[eE][+\\-]?\\d+)?\\b"};
-	static std::regex hexRegex("^([\\dA-Fa-f]+)\\b");
-	
+	static std::regex hexRegex("^([+\\-]?0x[\\dA-Fa-f]+)\\b");
+	auto s = string(sv);
+	std::smatch sm;
+
+	if (std::regex_search(s, sm, hexRegex)) {
+		return static_cast<size_t>(sm[0].length());
+	}
+	return 0_uz;
+}
+
+auto lexIntegerLiteral(string_view sv)
+{
+	static std::regex integerRegex{"^([+\\-]?(?:0|[1-9]\\d*))(?:\\b[^\\.]|$)"};
 	auto s = string(sv);
 	std::smatch sm;
 	
-	if (sv.size() > 2 && sv[0] == '0') {
-		if (sv[1] == 'x') {
-			s = s.substr(2);
-			if (std::regex_search(s, sm, hexRegex)) {
-				return static_cast<size_t>(sm[0].length() + 2);
-			}
-			return 0_uz;
-		}
+	if (std::regex_search(s, sm, integerRegex)) {
+		return static_cast<size_t>(sm[1].length());
 	}
+	return 0_uz;
+}
+
+auto lexFloatLiteral(string_view sv)
+{
+	static std::regex floatRegex{"^[+\\-]?(?:0|[1-9]\\d*)(?:\\.\\d*)(?:[eE][+\\-]?\\d+)?\\b"};
+	auto s = string(sv);
+	std::smatch sm;
 	
-	if (std::regex_search(s, sm, numberRegex)) {
+	if (std::regex_search(s, sm, floatRegex)) {
 		return static_cast<size_t>(sm[0].length());
 	}
 	return 0_uz;
@@ -813,7 +901,9 @@ const auto lexRules = initializer_list<LexRule>{
 	{TokenType::Separator, lexSeparator},
 	{TokenType::Segment, lexSegment},
 	{TokenType::String, lexString},
-	{TokenType::Numeric, lexNumeric},
+	{TokenType::HexLiteral, lexHexLiteral},
+	{TokenType::IntegerLiteral, lexIntegerLiteral},
+	{TokenType::FloatLiteral, lexFloatLiteral},
 	{TokenType::Label, lexLabel},
 	{TokenType::Identifier, lexIdentifier},
 };

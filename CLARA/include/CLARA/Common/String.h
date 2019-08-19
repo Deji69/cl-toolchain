@@ -37,7 +37,7 @@ constexpr auto stringToNumber(string_view sv, int base = 10)->optional<TNum>
 }
 
 template<typename TNum, std::enable_if_t<std::is_floating_point_v<TNum>, int> = 0>
-constexpr auto stringToNumber(string_view sv, std::chars_format fmt)->optional<TNum>
+constexpr auto stringToNumber(string_view sv, std::chars_format fmt = std::chars_format::general)->optional<TNum>
 {
 	TNum value;
 	auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), value, fmt);

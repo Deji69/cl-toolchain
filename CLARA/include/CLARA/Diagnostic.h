@@ -33,6 +33,7 @@ namespace CLARA::CLASM {
 		LabelRedefinition = 2018,              // label encountered with a name that was already declared
 		UnresolvedLabelReference = 2019,       // label reference with the label never defined
 		InvalidKeywordArgCount = 2020,         // invalid number of arguments supplied after keyword
+		InvalidNumericLiteral = 2021,          // numeric literal probably exceeded integer range
 	};
 
 	template<DiagCode TCode>
@@ -365,5 +366,9 @@ namespace CLARA::CLASM {
 				numGiven
 			);
 		}
+	};
+	
+	template<> struct Diagnostic<DiagCode::InvalidNumericLiteral> {
+		constexpr static auto name = "invalid numeric literal"sv;
 	};
 }

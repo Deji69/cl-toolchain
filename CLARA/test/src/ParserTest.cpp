@@ -34,6 +34,7 @@ auto getParseOpts(bool forceTokenization = false)
 
 struct ParsingTestHelper {
 	Parser::Options options;
+	Parser::Result result;
 	shared_ptr<TokenStream> tokensPtr;
 
 	ParsingTestHelper(bool forceTokenization = false) : options(getParseOpts(forceTokenization))
@@ -46,8 +47,8 @@ struct ParsingTestHelper {
 
 	auto& parseExpect(string code, initializer_list<TokenType> types)
 	{
-		auto res = parse(code);
-		tokensPtr = res.info.tokens;
+		result = parse(code);
+		tokensPtr = result.info.tokens;
 		REQUIRE(tokensPtr->size() >= types.size());
 		auto i = 0_uz;
 		for (auto type : types) {
@@ -192,7 +193,7 @@ TEST_CASE("Lexer tokenizes numerics", "[Lexer]")
 	}
 	
 	SECTION("tokenizes hexadecimals") {
-		auto& tokens = lexerHelper.parseExpect("0x0 0x1 0x10 0xFF 0x100", {
+		auto& tokens = lexerHelper.parseExpect("0x0 0x1 0x10 0xFF 0x100 -0x8F", {
 			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
 			TokenType::Numeric, TokenType::Numeric
 		});
@@ -251,24 +252,94 @@ TEST_CASE("Parser parses numerics", "[Parser]") {
 			TokenType::Numeric, TokenType::Numeric
 		});
 		
-		CHECK(tokens[0].text == "123");
-		CHECK(tokens[1].text == "3.14");
-		CHECK(tokens[2].text == "-12");
-		CHECK(tokens[3].text == "-12.4");
-		CHECK(tokens[4].text == "1.e-4");
+		CHECK(is<int8>(tokens[0].annotation));
+		CHECK(is<float>(tokens[1].annotation));
+		CHECK(is<int8>(tokens[2].annotation));
+		CHECK(is<float>(tokens[3].annotation));
+		CHECK(is<float>(tokens[4].annotation));
 	}
 	
-	SECTION("tokenizes hexadecimals") {
-		auto& tokens = lexerHelper.parseExpect("0x0 0x1 0x10 0xFF 0x100", {
+	SECTION("parses hexadecimals") {
+		auto& tokens = lexerHelper.parseExpect("0x0 0x1 0x10 0x80 0xFF 0x100 0x8000 0xFFFF 0x10000 0x7FFFFFFF 0x80000000 0xFFFFFFFF", {
+			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
+			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
+			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
+			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric
+		});
+		
+		REQUIRE(is<int8>(tokens[0].annotation));
+		CHECK(get<int8>(tokens[0].annotation) == 0x0);
+		REQUIRE(is<int8>(tokens[1].annotation));
+		CHECK(get<int8>(tokens[1].annotation) == 0x1);
+		REQUIRE(is<int8>(tokens[2].annotation));
+		CHECK(get<int8>(tokens[2].annotation) == 0x10);
+		REQUIRE(is<uint8>(tokens[3].annotation));
+		CHECK(get<uint8>(tokens[3].annotation) == 0x80);
+		REQUIRE(is<uint8>(tokens[4].annotation));
+		CHECK(get<uint8>(tokens[4].annotation) == 0xFF);
+		REQUIRE(is<uint8>(tokens[4].annotation));
+		CHECK(get<uint8>(tokens[4].annotation) == 0xFF);
+		REQUIRE(is<int16>(tokens[5].annotation));
+		CHECK(get<int16>(tokens[5].annotation) == 0x100);
+		REQUIRE(is<uint16>(tokens[6].annotation));
+		CHECK(get<uint16>(tokens[6].annotation) == 0x8000);
+		REQUIRE(is<uint16>(tokens[7].annotation));
+		CHECK(get<uint16>(tokens[7].annotation) == 0xFFFF);
+		REQUIRE(is<int32>(tokens[8].annotation));
+		CHECK(get<int32>(tokens[8].annotation) == 0x10000);
+		REQUIRE(is<int32>(tokens[9].annotation));
+		CHECK(get<int32>(tokens[9].annotation) == 0x7FFFFFFF);
+		REQUIRE(is<uint32>(tokens[10].annotation));
+		CHECK(get<uint32>(tokens[10].annotation) == 0x80000000);
+		REQUIRE(is<uint32>(tokens[11].annotation));
+		CHECK(get<uint32>(tokens[11].annotation) == 0xFFFFFFFF);
+	}
+	
+	SECTION("parses negated hexadecimals") {
+		auto& tokens = lexerHelper.parseExpect("-0x0 -0x1 -0x7F -0x80 -0x7FF -0x8000 -0x7FFFFFFF -0x80000000", {
+			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
 			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
 			TokenType::Numeric, TokenType::Numeric
 		});
+		REQUIRE(is<int8_t>(tokens[0].annotation));
+		REQUIRE(get<int8_t>(tokens[0].annotation) == 0x0);
+		REQUIRE(is<int8_t>(tokens[1].annotation));
+		REQUIRE(get<int8_t>(tokens[1].annotation) == -0x1);
+		REQUIRE(is<int8_t>(tokens[2].annotation));
+		REQUIRE(get<int8_t>(tokens[2].annotation) == -0x7F);
+		REQUIRE(is<int16_t>(tokens[3].annotation));
+		REQUIRE(get<int16_t>(tokens[3].annotation) == -0x80);
+		REQUIRE(is<int16_t>(tokens[4].annotation));
+		REQUIRE(get<int16_t>(tokens[4].annotation) == -0x7FF);
+		REQUIRE(is<int32_t>(tokens[5].annotation));
+		REQUIRE(get<int32_t>(tokens[5].annotation) == -0x8000);
+		REQUIRE(is<int32_t>(tokens[6].annotation));
+		REQUIRE(get<int32_t>(tokens[6].annotation) == -0x7FFFFFFF);
+		REQUIRE(is<int64_t>(tokens[7].annotation));
+		REQUIRE(get<int64_t>(tokens[7].annotation) == -0x80000000_i64);
+	}
+	
+	SECTION("diagnoses invalid literals") {
+		{
+			auto res = lexerHelper.parse("push 0xFFFFFFFFFFFFFFFF1");
+			REQUIRE(res.numErrors >= 1);
+			CHECK(res.reports[0].diagnosis.getCode() == DiagCode::InvalidNumericLiteral);
+		}
+		{
+			auto res = lexerHelper.parse("push -0x8000000000000000");
+			REQUIRE(res.numErrors >= 1);
+			CHECK(res.reports[0].diagnosis.getCode() == DiagCode::InvalidNumericLiteral);
+		}
+	}
+	
+	SECTION("parses floating-point literals") {
+		auto& tokens = lexerHelper.parseExpect("3.0 3.14 3.1415926535897932384626433832795", {
+			TokenType::Numeric, TokenType::Numeric
+		});
 		
-		CHECK(tokens[0].text == "0x0");
-		CHECK(tokens[1].text == "0x1");
-		CHECK(tokens[2].text == "0x10");
-		CHECK(tokens[3].text == "0xFF");
-		CHECK(tokens[4].text == "0x100");
+		CHECK(is<float>(tokens[0].annotation));
+		CHECK(is<float>(tokens[1].annotation));
+		CHECK(is<float>(tokens[2].annotation));
 	}
 }
 

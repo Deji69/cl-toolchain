@@ -11,15 +11,18 @@ enum class TokenType {
 	EOL,
 	WhiteSpace,
 	Separator,
-	Keyword,
 	Directive,
 	Segment,
-	Label,
-	Identifier,
-	Mnemonic,
-	Instruction,
-	Numeric,
 	String,
+	Identifier, // pre-parsed form of one of:
+		Keyword,
+		Label,
+		Mnemonic,
+		Instruction,
+	Numeric, // generic, parsed form of one of:
+		HexLiteral,
+		IntegerLiteral,
+		FloatLiteral,
 };
 
 using TokenAnnotation = variant<
@@ -80,6 +83,11 @@ inline auto CLARA::to_string(CLASM::TokenType type)
 		return "instruction"s;
 	case CLASM::TokenType::Numeric:
 		return "numeric literal"s;
+	case CLASM::TokenType::HexLiteral:
+	case CLASM::TokenType::IntegerLiteral:
+		return "integer literal"s;
+	case CLASM::TokenType::FloatLiteral:
+		return "floating-point literal"s;
 	case CLASM::TokenType::String:
 		return "string literal"s;
 	}
