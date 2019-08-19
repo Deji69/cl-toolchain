@@ -6,8 +6,7 @@ using namespace CLARA;
 using namespace CLARA::CLASM;
 
 template<typename T>
-auto isOneOf(const T& value, initializer_list<T> oneOfThese)
-{
+auto isOneOf(const T& value, initializer_list<T> oneOfThese) {
 	for (auto& one : oneOfThese) {
 		if (value == one)
 			return true;
@@ -15,16 +14,14 @@ auto isOneOf(const T& value, initializer_list<T> oneOfThese)
 	return false;
 }
 
-auto checkResult(const Parser::Result& res)
-{
+auto checkResult(const Parser::Result& res) {
 	for (auto& report : res.reports) {
 		UNSCOPED_INFO(string{report.diagnosis.getName()} + " ["s + to_string(report.diagnosis.getCodeInt()) + "]: "s + string{report.token.text});
 	}
 	return res.ok();
 }
 
-auto getParseOpts(bool forceTokenization = false)
-{
+auto getParseOpts(bool forceTokenization = false) {
 	// disabling reporting errors to stdout/stderr as it will mess with test results
 	auto options = Parser::Options{};
 	options.errorReporting = false;
@@ -40,13 +37,11 @@ struct ParsingTestHelper {
 	ParsingTestHelper(bool forceTokenization = false) : options(getParseOpts(forceTokenization))
 	{ }
 
-	auto parse(string code)
-	{
+	auto parse(string code) {
 		return Parser::tokenize(options, make_shared<Source>("test", code));
 	}
 
-	auto& parseExpect(string code, initializer_list<TokenType> types)
-	{
+	auto& parseExpect(string code, initializer_list<TokenType> types) {
 		result = parse(code);
 		tokensPtr = result.info.tokens;
 		REQUIRE(tokensPtr->size() >= types.size());
@@ -61,8 +56,7 @@ struct ParsingTestHelper {
 auto lexerHelper = ParsingTestHelper(true);
 auto helper = ParsingTestHelper();
 
-TEST_CASE("Parser enforces start of line tokens per segment", "[Parser]")
-{
+TEST_CASE("Parser enforces start of line tokens per segment", "[Parser]") {
 	SECTION("Default header segment expects a keyword or segment")
 	{
 		auto res = helper.parse("\"string\"");
@@ -109,8 +103,7 @@ TEST_CASE("Parser enforces start of line tokens per segment", "[Parser]")
 	}
 }
 
-TEST_CASE("Lexer tokenizes final newline", "[Lexer]")
-{
+TEST_CASE("Lexer tokenizes final newline", "[Lexer]") {
 	auto res = lexerHelper.parse("\r\n\r\n");
 	REQUIRE(checkResult(res));
 
@@ -119,8 +112,7 @@ TEST_CASE("Lexer tokenizes final newline", "[Lexer]")
 	CHECK(tokens[0].type == TokenType::EOL);
 }
 
-TEST_CASE("Lexer skips whitespace", "[Lexer]")
-{
+TEST_CASE("Lexer skips whitespace", "[Lexer]") {
 	auto res = lexerHelper.parse(" \t\n\t");
 	REQUIRE(checkResult(res));
 
@@ -130,8 +122,7 @@ TEST_CASE("Lexer skips whitespace", "[Lexer]")
 	CHECK(tokens[0].text.empty());
 }
 
-TEST_CASE("Lexer tokenizes segments", "[Lexer]")
-{
+TEST_CASE("Lexer tokenizes segments", "[Lexer]") {
 	auto res = lexerHelper.parse(".code");
 	auto& tokens = *res.info.tokens;
 	REQUIRE(tokens.size() >= 1_uz);
@@ -139,8 +130,7 @@ TEST_CASE("Lexer tokenizes segments", "[Lexer]")
 	REQUIRE(get<Segment::Type>(tokens[0].annotation) == Segment::Code);
 }
 
-TEST_CASE("Lexer tokenizes instruction", "[Lexer]")
-{
+TEST_CASE("Lexer tokenizes instruction", "[Lexer]") {
 	auto res = lexerHelper.parse("nop");
 	REQUIRE(checkResult(res));
 
@@ -150,8 +140,7 @@ TEST_CASE("Lexer tokenizes instruction", "[Lexer]")
 	CHECK(get<Instruction::Type>(tokens[0].annotation) == Instruction::NOP);
 }
 
-TEST_CASE("Lexer skips comments", "[Lexer]")
-{
+TEST_CASE("Lexer skips comments", "[Lexer]") {
 	auto res = lexerHelper.parse("nop; comment here\n ; another comment\nnop");
 	REQUIRE(checkResult(res));
 
@@ -161,8 +150,7 @@ TEST_CASE("Lexer skips comments", "[Lexer]")
 	CHECK(tokens[1].type == TokenType::Instruction);
 }
 
-TEST_CASE("Lexer tokenizes labels", "[Lexer]")
-{
+TEST_CASE("Lexer tokenizes labels", "[Lexer]") {
 	auto res = lexerHelper.parse("label: nop");
 	REQUIRE(checkResult(res));
 
@@ -172,13 +160,11 @@ TEST_CASE("Lexer tokenizes labels", "[Lexer]")
 	CHECK(tokens[1].type == TokenType::Instruction);
 }
 
-TEST_CASE("Lexer tokenizes separated instructions", "[Lexer]")
-{
+TEST_CASE("Lexer tokenizes separated instructions", "[Lexer]") {
 	lexerHelper.parseExpect("nop,nop", {TokenType::Instruction, TokenType::Instruction});
 }
 
-TEST_CASE("Lexer tokenizes numerics", "[Lexer]")
-{
+TEST_CASE("Lexer tokenizes numerics", "[Lexer]") {
 	SECTION("tokenizes decimals") {
 		auto& tokens = lexerHelper.parseExpect("123 3.14 -12 -12.4 1.e-4", {
 			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
@@ -206,8 +192,7 @@ TEST_CASE("Lexer tokenizes numerics", "[Lexer]")
 	}
 }
 
-TEST_CASE("Lexer tokenizes strings", "[Lexer]")
-{
+TEST_CASE("Lexer tokenizes strings", "[Lexer]") {
 	lexerHelper.parseExpect("\"hello world\"\nlabel: \"here is\\\\\\\" a \\\"quoted\\\" string\" not_a_string", {
 		TokenType::String, TokenType::Label, TokenType::String, TokenType::Identifier
 	});
@@ -343,10 +328,8 @@ TEST_CASE("Parser parses numerics", "[Parser]") {
 	}
 }
 
-TEST_CASE("Parser parses labels", "[Parser]")
-{
-	SECTION("Labels can be defined")
-	{
+TEST_CASE("Parser parses labels", "[Parser]") {
+	SECTION("Labels can be defined") {
 		auto res = helper.parse(".code\nlabel:");
 		auto& tokens = *res.info.tokens;
 		auto& labels = res.info.labels;
@@ -364,8 +347,7 @@ TEST_CASE("Parser parses labels", "[Parser]")
 		CHECK(&label->definition == &labelToken);
 	}
 
-	SECTION("Labels can be referenced")
-	{
+	SECTION("Labels can be referenced") {
 		auto res = helper.parse(".code\nlabel: jmp label");
 		REQUIRE(checkResult(res));
 		auto& tokens = *res.info.tokens;
@@ -376,8 +358,7 @@ TEST_CASE("Parser parses labels", "[Parser]")
 		REQUIRE(ref == get<const Label*>(tokens[1].annotation));
 	}
 
-	SECTION("Labels can be defined after referencing")
-	{
+	SECTION("Labels can be defined after referencing") {
 		auto res = helper.parse(".code\njmp label\nlabel:");
 		REQUIRE(checkResult(res));
 		auto& tokens = *res.info.tokens;
@@ -389,22 +370,19 @@ TEST_CASE("Parser parses labels", "[Parser]")
 	}
 }
 
-TEST_CASE("Parser resolves mnemonics", "[Parser]")
-{
+TEST_CASE("Parser resolves mnemonics", "[Parser]") {
 	auto res = helper.parse(".code\npush 0xFF\npush 0x100");
 	REQUIRE(checkResult(res));
 }
 
-TEST_CASE("Error unexpected lexeme", "[Error Handling]")
-{
+TEST_CASE("Error unexpected lexeme", "[Error Handling]") {
 	auto res = lexerHelper.parse("`123");
 	REQUIRE(res.hadFatal);
 	REQUIRE(res.numErrors == 1);
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::UnexpectedLexeme);
 }
 
-TEST_CASE("Error expected EOL after segment", "[Error Handling]")
-{
+TEST_CASE("Error expected EOL after segment", "[Error Handling]") {
 	auto res = helper.parse(".code 1");
 	REQUIRE(res.numErrors == 1);
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::ExpectedToken);
@@ -413,59 +391,51 @@ TEST_CASE("Error expected EOL after segment", "[Error Handling]")
 	CHECK(get<TokenType>(diagnosis.expected) == TokenType::EOL);
 }
 
-TEST_CASE("Error unexpected separator", "[Error Handling]")
-{
+TEST_CASE("Error unexpected separator", "[Error Handling]") {
 	auto res = lexerHelper.parse(":");
 	REQUIRE(res.numErrors == 1);
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::UnexpectedSeparator);
 }
 
-TEST_CASE("Error unexpected segment after tokens", "[Error Handling]")
-{
+TEST_CASE("Error unexpected segment after tokens", "[Error Handling]") {
 	auto res = lexerHelper.parse("nop .code");
 	REQUIRE(res.numErrors == 1);
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::UnexpectedSegmentAfterTokens);
 }
 
-TEST_CASE("Error unexpected label after tokens", "[Error Handling]")
-{
+TEST_CASE("Error unexpected label after tokens", "[Error Handling]") {
 	// parser picks up 'label' as an identifier (possible label pointer) and then errors on the ':' - this is ok?
 	auto res = lexerHelper.parse(".code\nnop label:");
 	REQUIRE(res.numErrors >= 1);
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::UnexpectedLabelAfterTokens);
 }
 
-TEST_CASE("Error invalid identifier", "[Error Handling]")
-{
+TEST_CASE("Error invalid identifier", "[Error Handling]") {
 	auto res = helper.parse("blahdyblahbloo");
 	REQUIRE(res.numErrors == 1);
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::InvalidIdentifier);
 }
 
-TEST_CASE("Error instruction passed as operand", "[Error Handling]")
-{
+TEST_CASE("Error instruction passed as operand", "[Error Handling]") {
 	auto res = lexerHelper.parse("nop nop");
 	REQUIRE(res.numErrors == 1);
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::UnexpectedOperand);
 	CHECK(res.reports[0].diagnosis.getMessage() == "unexpected instruction encountered, use ',' to separate multiple instructions on one line"s);
 }
 
-TEST_CASE("Error instruction missing operand", "[Error Handling]")
-{
+TEST_CASE("Error instruction missing operand", "[Error Handling]") {
 	auto res = lexerHelper.parse("pushb");
 	REQUIRE(res.numErrors == 1);
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::MissingOperand);
 }
 
-TEST_CASE("Error instruction invalid operand type", "[Error Handling]")
-{
+TEST_CASE("Error instruction invalid operand type", "[Error Handling]") {
 	auto res = lexerHelper.parse("pushb \"str\"");
 	REQUIRE(res.numErrors == 1);
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::InvalidOperandType);
 }
 
-TEST_CASE("Error undefined label", "[Error Handling]")
-{
+TEST_CASE("Error undefined label", "[Error Handling]") {
 	auto res = helper.parse(".code\njmp label");
 	REQUIRE(res.numErrors >= 1);
 	auto& tokens = *res.info.tokens;
