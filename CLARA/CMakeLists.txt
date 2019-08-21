@@ -1,6 +1,5 @@
 ## Project
-project(CLARA VERSION 0.1.0
-              LANGUAGES CXX)
+project(CLARA VERSION 0.1.0 LANGUAGES CXX)
 
 ## Options
 option(CLARA_TESTING "Build unit tests" ON)
@@ -14,6 +13,7 @@ set(CLARA_SOURCE_DIR   "${PROJECT_SOURCE_DIR}/src/")
 
 ## Packages
 find_package(fmt CONFIG REQUIRED)
+#find_package(perfvect CONFIG REQUIRED)
 
 ## Target
 set(CLARA_HEADERS
@@ -23,7 +23,6 @@ set(CLARA_HEADERS
 	"${CLARA_INCLUDE_DIR}/CLARA/Common/Literals.h"
 	"${CLARA_INCLUDE_DIR}/CLARA/Common/Macros.h"
 	"${CLARA_INCLUDE_DIR}/CLARA/Common/String.h"
-	"${CLARA_INCLUDE_DIR}/CLARA/Common/Vector.h"
 	"${CLARA_INCLUDE_DIR}/CLARA/Assembly.h"
 	"${CLARA_INCLUDE_DIR}/CLARA/Common.h"
 	"${CLARA_INCLUDE_DIR}/CLARA/Compiler.h"
