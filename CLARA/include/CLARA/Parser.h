@@ -36,7 +36,7 @@ struct ParseInfo {
 
 struct Result {
 	ParseInfo info;
-	vector<Report> reports;
+	small_vector<Report, 16, 128> reports;
 	size_t numWarnings = 0;
 	size_t numErrors = 0;
 	bool hadFatal = false;
