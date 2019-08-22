@@ -965,6 +965,7 @@ auto tokenize(const Options& options, shared_ptr<const Source> source)->Result
 		return state;
 	}()};
 	
+	result.info.labels.reserve(500);
 	parserState.unresolvedLabelTokens.reserve(100);
 
 	auto reporter = ([&]()->Reporter {
