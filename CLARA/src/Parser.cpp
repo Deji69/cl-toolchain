@@ -151,7 +151,7 @@ using ParseResult = variant<Success, Error, vector<Error>>;
 struct State {
 	ParseInfo& info;
 	ParseState state;
-	Segment::Type segment = Segment::None;
+	Segment::Type segment = Segment::MAX;
 	vector<Token*> unresolvedLabelTokens;
 	std::unordered_multimap<string, size_t> unresolvedLabelTokenNameMap;
 
@@ -190,21 +190,21 @@ auto parseIdentifier(const State& state, Token&& token)->ParseState
 {
 	auto id = string(token.text);
 	
-	if (auto kw = Keyword::fromName(id)) {
+	if (auto kw = Keyword::fromName(id); kw != Keyword::MAX) {
 		token.type = TokenType::Keyword;
-		token.annotation.emplace<Keyword::Type>(*kw);
+		token.annotation.emplace<Keyword::Type>(kw);
 		return Continue(token);
 	}
 
-	if (auto mnemonic = Mnemonic::fromName(id)) {
+	if (auto mnemonic = Mnemonic::fromName(id); mnemonic != Mnemonic::MAX) {
 		token.type = TokenType::Mnemonic;
-		token.annotation.emplace<Mnemonic::Type>(*mnemonic);
+		token.annotation.emplace<Mnemonic::Type>(mnemonic);
 		return Continue(token);
 	}
 
-	if (auto insn = Instruction::fromName(id)) {
+	if (auto insn = Instruction::fromName(id); insn != Instruction::MAX) {
 		token.type = TokenType::Instruction;
-		token.annotation.emplace<Instruction::Type>(*insn);
+		token.annotation.emplace<Instruction::Type>(insn);
 		return Continue(token);
 	}
 
@@ -225,8 +225,8 @@ auto parseSegment(const State& state, Token&& token)->ParseState
 
 	auto id = token.text.substr(1);
 
-	if (auto segment = Segment::fromName(id)) {
-		token.annotation = *segment;
+	if (auto segment = Segment::fromName(id); segment != Segment::MAX) {
+		token.annotation = segment;
 		return Finish(token);
 	}
 
@@ -943,10 +943,9 @@ auto getExpectedTokenError(const Expected& expect, const Token& token)->optional
 auto& addExpectationsForSegment(Finish& state, Segment::Type segment)
 {
 	switch (segment) {
-	case Segment::None: state.expect({TokenType::EOL, TokenType::Identifier, TokenType::Segment}); break;
+	case Segment::MAX: state.expect({TokenType::EOL, TokenType::Identifier, TokenType::Segment}); break;
 	case Segment::Code: state.expect({TokenType::EOL, TokenType::Identifier, TokenType::Label, TokenType::Segment}); break;
 	case Segment::Data: state.expect({TokenType::EOL, TokenType::Label, TokenType::Segment}); break;
-	case Segment::MAX: break;
 	}
 	return state;
 }
@@ -962,7 +961,7 @@ auto tokenize(const Options& options, shared_ptr<const Source> source)->Result
 
 	parserState.state = ParseState{[]() {
 		Finish state;
-		addExpectationsForSegment(state, Segment::None);
+		addExpectationsForSegment(state, Segment::MAX);
 		return state;
 	}()};
 	

@@ -12,7 +12,7 @@ struct CompilerContext {
 	IBinaryOutput& output;
 	const TokenStream& tokenStream;
 	TokenIterator it;
-	Segment::Type segment = Segment::None;
+	Segment::Type segment = Segment::MAX;
 
 	CompilerContext(Reporter& report, IBinaryOutput& out, const TokenStream& ts) :
 		report(report), output(out), tokenStream(ts)
@@ -34,8 +34,8 @@ auto Compiler::compile(const TokenStream& ts, IBinaryOutput& out)->void
 	while (ctx.it != ts.all().end()) {
 		switch (ctx.it->type) {
 		case TokenType::Segment:
-			if (auto segment = Segment::fromName(ctx.it->text.substr(1))) {
-				ctx.segment = *segment;
+			if (auto segment = Segment::fromName(ctx.it->text.substr(1)); segment != Segment::MAX) {
+				ctx.segment = segment;
 			}
 			else {
 				report.error("Invalid segment name"sv);

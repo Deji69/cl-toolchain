@@ -6,32 +6,27 @@ using namespace CLARA::CLASM;
 
 TEST_CASE("Get keyword by name", "[Assembly]") {
 	auto kw = Keyword::fromName("extern");
-	REQUIRE(kw.has_value());
-	REQUIRE(*kw == Keyword::Extern);
+	REQUIRE(kw == Keyword::Extern);
 	kw = Keyword::fromName("global");
-	REQUIRE(kw.has_value());
-	REQUIRE(*kw == Keyword::Global);
+	REQUIRE(kw == Keyword::Global);
 	kw = Keyword::fromName("include_once");
-	REQUIRE(!kw.has_value());
+	REQUIRE(kw == Keyword::MAX);
 }
 
 TEST_CASE("Get mnemonic by name", "[Assembly]") {
 	auto mn = Mnemonic::fromName("call");
-	REQUIRE(mn);
-	REQUIRE(*mn == Mnemonic::CALL);
+	REQUIRE(mn == Mnemonic::CALL);
 	mn = Mnemonic::fromName("pusha");
-	REQUIRE(mn);
-	REQUIRE(*mn == Mnemonic::PUSHA);
+	REQUIRE(mn == Mnemonic::PUSHA);
 	mn = Mnemonic::fromName("pushb");
-	REQUIRE(!mn);
+	REQUIRE(mn == Mnemonic::MAX);
 }
 
 TEST_CASE("Get instruction by name", "[Assembly]") {
 	auto res = Instruction::fromName("add");
-	REQUIRE(res);
-	REQUIRE(*res == Instruction::ADD);
+	REQUIRE(res == Instruction::ADD);
 	res = Instruction::fromName("abb");
-	REQUIRE(!res);
+	REQUIRE(res == Instruction::MAX);
 }
 
 TEST_CASE("Get instruction overloads", "[Assembly]") {

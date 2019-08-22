@@ -4,23 +4,24 @@
 using namespace CLARA;
 using namespace CLARA::CLASM;
 
-const auto keywords = vector<pair<string, Keyword::Type>>{
-	{"global",  Keyword::Global},
-	{"extern",  Keyword::Extern},
-	{"include", Keyword::Include},
+const auto keywords = array<string, Keyword::MAX>{
+	/* Global  */ "global",
+	/* Extern  */ "extern",
+	/* Import  */ "import",
+	/* Include */ "include",
 };
-const auto mnemonics = vector<pair<string, Mnemonic::Type>>{
-	{"push",   Mnemonic::PUSH},
-	{"pusha",  Mnemonic::PUSHA},
-	{"pop",    Mnemonic::POP},
-	{"dup",    Mnemonic::DUP},
-	{"jmp",    Mnemonic::JMP},
-	{"call",   Mnemonic::CALL},
+const auto mnemonics = array<string, Mnemonic::MAX>{
+	/* PUSH  */ "push",
+	/* PUSHA */ "pusha",
+	/* POP   */ "pop",
+	/* DUP   */ "dup",
+	/* JMP   */ "jmp",
+	/* CALL  */ "call",
 };
-const auto segmentNames = vector<pair<string, Segment::Type>>{{
-	{"code", Segment::Code},
-	{"data", Segment::Data},
-}};
+const auto segmentNames = array<string, Segment::MAX>{
+	/* Code */ "data",
+	/* Data */ "code",
+};
 const auto mnemonicTable = array<vector<InstructionOverload>, static_cast<size_t>(Mnemonic::MAX)>{{
 	/* PUSH */ {
 		{Instruction::PUSHN,  {}},
@@ -133,33 +134,37 @@ const auto instructionMap = unordered_map<string, Instruction::Type>{
 	{"fastc",   Instruction::FASTC},
 };
 
-auto Keyword::fromName(const string& name)->optional<Keyword::Type>
+auto Keyword::fromName(const string& name)->Keyword::Type
 {
-	auto it = std::find_if(keywords.begin(), keywords.end(), [name](const auto& it) {
-		return it.first == name;
+	static_assert(keywords.size() == Keyword::MAX);
+	auto idx = findIndexIf(keywords.begin(), keywords.end(), [&](const auto& val) {
+		return val == name;
 	});
-	return it != keywords.end() ? make_optional(it->second) : nullopt;
+	return static_cast<Keyword::Type>(idx);
 }
 
-auto Instruction::fromName(const string& name)->optional<Instruction::Type>
+auto Instruction::fromName(const string& name)->Instruction::Type
 {
-	return findOpt(instructionMap, name);
+	auto it = instructionMap.find(name);
+	return it != instructionMap.end() ? it->second : Instruction::MAX;
 }
 
-auto Mnemonic::fromName(const string& name)->optional<Mnemonic::Type>
+auto Mnemonic::fromName(const string& name)->Mnemonic::Type
 {
-	auto it = std::find_if(mnemonics.begin(), mnemonics.end(), [name](const auto& it) {
-		return it.first == name;
+	static_assert(mnemonics.size() == Mnemonic::MAX);
+	auto idx = findIndexIf(mnemonics.begin(), mnemonics.end(), [&](const auto& val) {
+		return val == name;
 	});
-	return it != mnemonics.end() ? make_optional(it->second) : nullopt;
+	return static_cast<Mnemonic::Type>(idx);
 }
 
-auto Segment::fromName(string_view name)->optional<Segment::Type>
+auto Segment::fromName(string_view name)->Segment::Type
 {
-	auto it = std::find_if(segmentNames.begin(), segmentNames.end(), [name](const auto& pr) {
-		return pr.first == name;
+	static_assert(segmentNames.size() == Segment::MAX);
+	auto idx = findIndexIf(segmentNames.begin(), segmentNames.end(), [&](const auto& val) {
+		return val == name;
 	});
-	return it != segmentNames.end() ? make_optional(it->second) : nullopt;
+	return static_cast<Segment::Type>(idx);
 }
 
 const auto noOperands = vector<InstructionOperand>{};

@@ -25,21 +25,22 @@ struct InstructionOperand {
 class Segment {
 public:
 	enum Type {
-		None, Data, Code, MAX
+		Data, Code, MAX
 	};
 
 public:
-	static auto fromName(string_view)->optional<Type>;
+	static auto fromName(string_view)->Type;
 };
 
 class Keyword {
 public:
 	enum Type {
-		Global, Extern, Import, Include
+		Global, Extern, Import, Include,
+		MAX
 	};
 
 public:
-	static auto fromName(const string&)->optional<Type>;
+	static auto fromName(const string&)->Type;
 };
 
 class Mnemonic {
@@ -50,7 +51,7 @@ public:
 	};
 
 public:
-	static auto fromName(const string&)->optional<Type>;
+	static auto fromName(const string&)->Type;
 	static auto getOverloads(Type type)->const vector<InstructionOverload>&;
 };
 
@@ -93,7 +94,7 @@ public:
 	};
 
 public:
-	static auto fromName(const string& sv)->optional<Type>;
+	static auto fromName(const string& sv)->Type;
 	static auto getOperands(Type type)->const vector<InstructionOperand>&;
 };
 
