@@ -28,6 +28,8 @@ Source::Token::Token(const Source* source, size_t offset, size_t length) :
 Source::Source(string name, string code) : m_name(name), m_code(code)
 {
 	LineInfo line;
+	
+	m_lineInfos.reserve(2000);
 
 	for (auto i = 0u, chars = 0u; static_cast<size_t>(i) < code.size(); ++i, ++chars) {
 		if (code[i] == '\n') {
@@ -61,6 +63,7 @@ Source::Source(string name, string code) : m_name(name), m_code(code)
 
 	m_offsetLines.emplace(static_cast<uint>(line.offset), static_cast<uint>(m_lineInfos.size()));
 	m_lineInfos.push_back(line);
+	m_lineInfos.shrink_to_fit();
 }
 
 auto Source::getName() const->const string&
