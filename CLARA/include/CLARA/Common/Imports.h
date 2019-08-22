@@ -30,6 +30,8 @@
 #include <fmt/format.h>
 #include <fmt/color.h>
 
+#include <perfvect/small_vector.h>
+
 #ifdef _MSC_VER
 #pragma warning(pop)
 #undef CDECL
@@ -82,6 +84,8 @@ using std::variant;
 using std::vector;
 using std::weak_ptr;
 using std::wstring;
+using perfvect::static_vector;
+using perfvect::small_vector;
 
 template<typename T, typename... Types>
 inline constexpr auto is(const std::variant<Types...>& var) noexcept->bool

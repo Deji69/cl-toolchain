@@ -12,7 +12,7 @@ set(CLARA_TESTS_SOURCES
 )
 add_executable(clara_tests)
 target_sources(clara_tests PRIVATE ${CLARA_TESTS_SOURCES})
-target_link_libraries(clara_tests ${CLARA_TARGET_NAME} Catch2::Catch2)
+target_link_libraries(clara_tests ${CLARA_TARGET_NAME} Catch2::Catch2 perfvect::perfvect)
 target_compile_definitions(clara_tests PUBLIC _SILENCE_CXX17_RESULT_OF_DEPRECATION_WARNING)
 
 if(MSVC)

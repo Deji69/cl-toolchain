@@ -13,7 +13,7 @@ set(CLARA_SOURCE_DIR   "${PROJECT_SOURCE_DIR}/src/")
 
 ## Packages
 find_package(fmt CONFIG REQUIRED)
-#find_package(perfvect CONFIG REQUIRED)
+find_package(perfvect CONFIG REQUIRED)
 
 ## Target
 set(CLARA_HEADERS
@@ -55,7 +55,7 @@ target_compile_definitions(${CLARA_TARGET_NAME} PUBLIC _SILENCE_CXX17_RESULT_OF_
 target_include_directories(${CLARA_TARGET_NAME} PUBLIC
 	$<BUILD_INTERFACE:${CLARA_INCLUDE_DIR}>
 	$<INSTALL_INTERFACE:include>)
-target_link_libraries(${CLARA_TARGET_NAME} PRIVATE fmt::fmt)
+target_link_libraries(${CLARA_TARGET_NAME} PRIVATE fmt::fmt perfvect::perfvect)
 
 ## Tests
 include(CTest)
