@@ -5,8 +5,6 @@ using namespace CLARA::CLASM;
 
 namespace CLARA::CLASM::Parser {
 
-using TokenVec = vector<Token>;
-
 struct LexRule {
 	TokenType type;
 	size_t(*func)(string_view);
@@ -21,48 +19,37 @@ struct LexResult {
 };
 
 struct Continue {
-	variant<Token, TokenVec> token;
+	using Tokens = small_vector<Token, 16>;
+	Tokens tokens;
 
-	Continue() : token(TokenVec{})
-	{
-		get<TokenVec>(token).reserve(16);
-	}
+	Continue() = default;
 
-	Continue(Token token) : token(token)
+	Continue(Token token) : tokens({token})
 	{ }
 
-	Continue(Token&& token) : token(move(token))
+	Continue(Token&& token) : tokens({move(token)})
 	{ }
 
-	auto add(const variant<Token, TokenVec>& var)
+	auto add(const Token& token)
 	{
-		toVector();
-
-		auto& vec = get<TokenVec>(token);
-
-		if (is<Token>(var)) {
-			vec.emplace_back(get<Token>(var));
-		}
-		else {
-			auto& contVec = get<TokenVec>(var);
-			std::copy(contVec.begin(), contVec.end(), vec.begin());
-		}
+		tokens.emplace_back(token);
+	}
+	
+	auto add(const Tokens& newTokens)
+	{
+		tokens.insert(tokens.end(), newTokens.begin(), newTokens.end());
 	}
 
-	auto toVector()->TokenVec&
+	auto toVector()->TokenVec
 	{
-		if (!is<TokenVec>(token)) {
-			auto tok = move(get<Token>(token));
-			token.emplace<TokenVec>().emplace_back(move(tok));
-		}
-		return get<TokenVec>(token);
+		return TokenVec(tokens.begin(), tokens.end());
 	}
 };
 
 struct Finish {
 	optional<Token> token;
 	optional<Expected> expected;
-	vector<Report> reports;
+	small_vector<Report> reports;
 
 	Finish() = default;
 
@@ -131,7 +118,7 @@ struct Fatal {
 };
 
 struct Success {
-	vector<Token> tokens;
+	small_vector<Token, 16> tokens;
 
 	template<typename... TArgs>
 	decltype(auto) addToken(TArgs&&... args)
@@ -146,13 +133,13 @@ struct Error {
 };
 
 using ParseState = variant<Finish, Continue, Fatal>;
-using ParseResult = variant<Success, Error, vector<Error>>;
+using ParseResult = variant<Success, Error, small_vector<Error>>;
 
 struct State {
 	ParseInfo& info;
 	ParseState state;
 	Segment::Type segment = Segment::MAX;
-	vector<Token*> unresolvedLabelTokens;
+	small_vector<Token*> unresolvedLabelTokens;
 	std::unordered_multimap<string, size_t> unresolvedLabelTokenNameMap;
 
 	auto defineLabel(string name, Token& token)->pair<Label&, bool>
@@ -569,16 +556,12 @@ auto parseGlobalKeywordLine(State&, const TokenVec& tokens)->ParseResult
 	auto numArgs = tokens.size() - 1;
 
 	if (numArgs >= numParams) {
-		auto errors = vector<Error>();
+		auto errors = small_vector<Error, 8, 16>();
 		
 		for (auto it = tokens.cbegin() + 1; it != tokens.cend(); ++it) {
 			if (it->type != TokenType::Identifier) {
-				errors.reserve(16);
 				errors.emplace_back(Error{*it, diagnose<DiagCode::ExpectedToken>(it->type, TokenType::Label)});
 			}
-			
-			vector<int> vec;
-			vec.push_back(1);
 
 			auto& token = success.addToken(move(*it));
 			token.type = TokenType::Label;
@@ -600,6 +583,7 @@ auto parseKeywordLine(State& state, const TokenVec& tokens)->ParseResult
 	case Keyword::Extern:
 	case Keyword::Import:
 	case Keyword::Include:
+	case Keyword::MAX:
 		break;
 	}
 	return Error{tokens[0], diagnose<DiagCode::InvalidIdentifier>()};
@@ -648,7 +632,7 @@ auto parseLine(State& parser, Finish&& state)->ParseState
 
 auto parseLine(State& parser, Continue&& state)->ParseState
 {
-	auto& tokens = state.toVector();
+	auto tokens = state.toVector();
 
 	if (tokens.empty()) {
 		return Finish();
@@ -943,9 +927,9 @@ auto getExpectedTokenError(const Expected& expect, const Token& token)->optional
 auto& addExpectationsForSegment(Finish& state, Segment::Type segment)
 {
 	switch (segment) {
-	case Segment::MAX: state.expect({TokenType::EOL, TokenType::Identifier, TokenType::Segment}); break;
-	case Segment::Code: state.expect({TokenType::EOL, TokenType::Identifier, TokenType::Label, TokenType::Segment}); break;
-	case Segment::Data: state.expect({TokenType::EOL, TokenType::Label, TokenType::Segment}); break;
+	case Segment::MAX: return state.expect({TokenType::EOL, TokenType::Identifier, TokenType::Segment});
+	case Segment::Code: return state.expect({TokenType::EOL, TokenType::Identifier, TokenType::Label, TokenType::Segment});
+	case Segment::Data: return state.expect({TokenType::EOL, TokenType::Label, TokenType::Segment});
 	}
 	return state;
 }
@@ -1050,7 +1034,7 @@ auto tokenize(const Options& options, shared_ptr<const Source> source)->Result
 				return std::visit(visitor{
 					[&](Continue&& newState)->ParseState {
 						if (auto cont = get_if<Continue>(&state)) {
-							cont->add(newState.token);
+							cont->add(newState.tokens);
 							return state;
 						}
 						return move(newState);

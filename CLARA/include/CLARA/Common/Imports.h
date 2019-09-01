@@ -81,11 +81,12 @@ using std::unique_ptr;
 using std::unordered_map;
 using std::unordered_set;
 using std::variant;
-using std::vector;
 using std::weak_ptr;
 using std::wstring;
 using perfvect::static_vector;
+using perfvect::static_vector_base;
 using perfvect::small_vector;
+using perfvect::vector;
 
 template<typename T, typename... Types>
 inline constexpr auto is(const std::variant<Types...>& var) noexcept->bool

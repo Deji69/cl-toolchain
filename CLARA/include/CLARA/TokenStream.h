@@ -5,6 +5,8 @@
 
 namespace CLARA::CLASM {
 
+using TokenVec = vector<Token>;
+
 class TokenStream {
 public:
 	template<typename T>
@@ -132,7 +134,7 @@ public:
 		return tokens[index];
 	}
 	
-	constexpr auto all() const->const vector<Token>&
+	constexpr auto all() const->const TokenVec&
 	{
 		return tokens;
 	}
@@ -195,7 +197,7 @@ public:
 
 private:
 	shared_ptr<const Source> source;
-	vector<Token> tokens;
+	TokenVec tokens;
 };
 
 }
