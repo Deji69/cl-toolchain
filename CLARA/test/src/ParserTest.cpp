@@ -56,53 +56,6 @@ struct ParsingTestHelper {
 auto lexerHelper = ParsingTestHelper(true);
 auto helper = ParsingTestHelper();
 
-TEST_CASE("Parser enforces start of line tokens per segment", "[Parser]") {
-	SECTION("Default header segment expects a keyword or segment")
-	{
-		auto res = helper.parse("\"string\"");
-		REQUIRE(res.numErrors == 1_uz);
-		REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::ExpectedToken);
-		CHECK(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().given == TokenType::String);
-		REQUIRE(is<AnyOf>(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().expected));
-		auto& expected = get<AnyOf>(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().expected);
-
-		for (auto& expect : expected) {
-			REQUIRE(is<TokenType>(expect));
-			CHECK(isOneOf(get<TokenType>(expect), {TokenType::EOL, TokenType::Identifier, TokenType::Segment}));
-		}
-	}
-
-	SECTION("Code segment expects an instruction, mnemonic, label or segment")
-	{
-		auto res = helper.parse(".code\n\"string\"");
-		REQUIRE(res.numErrors == 1_uz);
-		REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::ExpectedToken);
-		CHECK(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().given == TokenType::String);
-		REQUIRE(is<AnyOf>(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().expected));
-		auto& expected = get<AnyOf>(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().expected);
-
-		for (auto& expect : expected) {
-			REQUIRE(is<TokenType>(expect));
-			CHECK(isOneOf(get<TokenType>(expect), {TokenType::EOL, TokenType::Identifier, TokenType::Label, TokenType::Segment}));
-		}
-	}
-
-	SECTION("Data segment expects a label or segment")
-	{
-		auto res = helper.parse(".data\n\"string\"");
-		REQUIRE(res.numErrors == 1_uz);
-		REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::ExpectedToken);
-		CHECK(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().given == TokenType::String);
-		REQUIRE(is<AnyOf>(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().expected));
-		auto& expected = get<AnyOf>(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().expected);
-
-		for (auto& expect : expected) {
-			REQUIRE(is<TokenType>(expect));
-			CHECK(isOneOf(get<TokenType>(expect), {TokenType::EOL, TokenType::Label, TokenType::Segment}));
-		}
-	}
-}
-
 TEST_CASE("Lexer tokenizes final newline", "[Lexer]") {
 	auto res = lexerHelper.parse("\r\n\r\n");
 	REQUIRE(checkResult(res));
@@ -196,6 +149,53 @@ TEST_CASE("Lexer tokenizes strings", "[Lexer]") {
 	lexerHelper.parseExpect("\"hello world\"\nlabel: \"here is\\\\\\\" a \\\"quoted\\\" string\" not_a_string", {
 		TokenType::String, TokenType::Label, TokenType::String, TokenType::Identifier
 	});
+}
+
+TEST_CASE("Parser enforces start of line tokens per segment", "[Parser]") {
+	SECTION("Default header segment expects a keyword or segment")
+	{
+		auto res = helper.parse("\"string\"");
+		REQUIRE(res.numErrors == 1_uz);
+		REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::ExpectedToken);
+		CHECK(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().given == TokenType::String);
+		REQUIRE(is<AnyOf>(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().expected));
+		auto& expected = get<AnyOf>(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().expected);
+
+		for (auto& expect : expected) {
+			REQUIRE(is<TokenType>(expect));
+			CHECK(isOneOf(get<TokenType>(expect), {TokenType::EOL, TokenType::Identifier, TokenType::Segment}));
+		}
+	}
+
+	SECTION("Code segment expects an instruction, mnemonic, label or segment")
+	{
+		auto res = helper.parse(".code\n\"string\"");
+		REQUIRE(res.numErrors == 1_uz);
+		REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::ExpectedToken);
+		CHECK(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().given == TokenType::String);
+		REQUIRE(is<AnyOf>(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().expected));
+		auto& expected = get<AnyOf>(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().expected);
+
+		for (auto& expect : expected) {
+			REQUIRE(is<TokenType>(expect));
+			CHECK(isOneOf(get<TokenType>(expect), {TokenType::EOL, TokenType::Identifier, TokenType::Label, TokenType::Segment}));
+		}
+	}
+
+	SECTION("Data segment expects a label or segment")
+	{
+		auto res = helper.parse(".data\n\"string\"");
+		REQUIRE(res.numErrors == 1_uz);
+		REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::ExpectedToken);
+		CHECK(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().given == TokenType::String);
+		REQUIRE(is<AnyOf>(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().expected));
+		auto& expected = get<AnyOf>(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().expected);
+
+		for (auto& expect : expected) {
+			REQUIRE(is<TokenType>(expect));
+			CHECK(isOneOf(get<TokenType>(expect), {TokenType::EOL, TokenType::Label, TokenType::Segment}));
+		}
+	}
 }
 
 TEST_CASE("Parser parses strings with hex escape sequences", "[Parser]") {
