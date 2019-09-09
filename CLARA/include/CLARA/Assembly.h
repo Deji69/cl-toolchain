@@ -132,3 +132,17 @@ inline auto CLARA::to_string(CLASM::OperandType type)
 
 	throw std::invalid_argument("Unhandled operand type name");
 }
+
+template<>
+inline auto CLARA::to_string(CLASM::Keyword::Type type)
+{
+	switch (type) {
+	case CLASM::Keyword::Global: return "global"s;
+	case CLASM::Keyword::Extern: return "extern"s;
+	case CLASM::Keyword::Import: return "import"s;
+	case CLASM::Keyword::Include: return "include"s;
+	case CLASM::Keyword::MAX: break;
+	}
+	
+	throw std::invalid_argument("Unhandled keyword type name");
+}

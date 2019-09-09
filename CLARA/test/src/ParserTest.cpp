@@ -370,6 +370,24 @@ TEST_CASE("Parser parses labels", "[Parser]") {
 	}
 }
 
+TEST_CASE("Parser parses keywords", "[Parser]") {
+	SECTION("global keyword") {
+		auto res = helper.parse("global main\n.code\nmain:");
+		REQUIRE(checkResult(res));
+		auto& tokens = *res.info.tokens;
+		REQUIRE(tokens.size() == 5);
+		REQUIRE(tokens[0].type == TokenType::Keyword);
+		REQUIRE(is<Keyword::Type>(tokens[0].annotation));
+		CHECK(get<Keyword::Type>(tokens[0].annotation) == Keyword::Global);
+		REQUIRE(tokens[1].type == TokenType::Label);
+		REQUIRE(is<const Label*>(tokens[1].annotation));
+		auto ref = get<const Label*>(tokens[1].annotation);
+		REQUIRE(is<const Label*>(tokens[3].annotation));
+		REQUIRE(ref == get<const Label*>(tokens[3].annotation));
+		CHECK(ref->name == "main");
+	}
+}
+
 TEST_CASE("Parser resolves mnemonics", "[Parser]") {
 	auto res = helper.parse(".code\npush 0xFF\npush 0x100");
 	REQUIRE(checkResult(res));

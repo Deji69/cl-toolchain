@@ -106,7 +106,7 @@ using std::make_unique;
 using std::move;
 using std::tie;
 
-template<typename T, std::enable_if_t<std::is_scalar_v<T>, int> = 0>
+template<typename T>
 inline constexpr auto to_string(T val)
 {
 	return std::to_string(val);

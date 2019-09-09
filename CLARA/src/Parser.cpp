@@ -556,6 +556,8 @@ auto parseGlobalKeywordLine(State&, const TokenVec& tokens)->ParseResult
 	auto numArgs = tokens.size() - 1;
 
 	if (numArgs >= numParams) {
+		success.addToken(move(tokens[0]));
+		
 		auto errors = small_vector<Error, 8, 16>();
 		
 		for (auto it = tokens.cbegin() + 1; it != tokens.cend(); ++it) {
@@ -570,6 +572,8 @@ auto parseGlobalKeywordLine(State&, const TokenVec& tokens)->ParseResult
 		if (!errors.empty()) {
 			return errors;
 		}
+		
+		return success;
 	}
 
 	auto token = numArgs > 1 ? Source::Token(tokens[1], tokens.back()) : Source::Token(tokens.front());
