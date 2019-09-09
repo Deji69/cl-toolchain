@@ -56,6 +56,14 @@ struct ParsingTestHelper {
 auto lexerHelper = ParsingTestHelper(true);
 auto helper = ParsingTestHelper();
 
+auto parseAnnotation(string code, size_t idx) {
+	idx += 1;
+	auto res = helper.parse(".code\n" + code);
+	REQUIRE(checkResult(res));
+	REQUIRE(res.info.tokens->size() > idx);
+	return (*res.info.tokens)[idx].annotation;
+}
+
 TEST_CASE("Lexer tokenizes final newline", "[Lexer]") {
 	auto res = lexerHelper.parse("\r\n\r\n");
 	REQUIRE(checkResult(res));
@@ -389,8 +397,29 @@ TEST_CASE("Parser parses keywords", "[Parser]") {
 }
 
 TEST_CASE("Parser resolves mnemonics", "[Parser]") {
-	auto res = helper.parse(".code\npush 0xFF\npush 0x100");
-	REQUIRE(checkResult(res));
+	SECTION("pushb") {
+		auto annotation = parseAnnotation("push 0xFF", 0);
+		REQUIRE(is<Instruction::Type>(annotation));
+		CHECK(get<Instruction::Type>(annotation) == Instruction::PUSHB);
+	}
+	
+	SECTION("pushw") {
+		auto annotation = parseAnnotation("push 0xFFFF", 0);
+		REQUIRE(is<Instruction::Type>(annotation));
+		CHECK(get<Instruction::Type>(annotation) == Instruction::PUSHW);
+	}
+	
+	SECTION("pushd") {
+		auto annotation = parseAnnotation("push 0xFFFFFFFF", 0);
+		REQUIRE(is<Instruction::Type>(annotation));
+		CHECK(get<Instruction::Type>(annotation) == Instruction::PUSHD);
+	}
+	
+	SECTION("pushq") {
+		auto annotation = parseAnnotation("push 0xFFFFFFFFFF", 0);
+		REQUIRE(is<Instruction::Type>(annotation));
+		CHECK(get<Instruction::Type>(annotation) == Instruction::PUSHQ);
+	}
 }
 
 TEST_CASE("Error unexpected lexeme", "[Error Handling]") {
