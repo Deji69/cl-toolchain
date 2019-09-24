@@ -905,7 +905,7 @@ auto getExpectedTokenError(const Expected& expect, const Token& token)->optional
 			}
 			return nullopt;
 		},
-		[&](const pair<TokenType, string>& typeAndValue)->optional<Report> {
+		[&](const TokenAndString& typeAndValue)->optional<Report> {
 			if (token.type != typeAndValue.first || token.text != typeAndValue.second) {
 				return Report::error(token, diagnose<DiagCode::ExpectedToken>(token.type, typeAndValue));
 			}
