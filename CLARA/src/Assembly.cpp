@@ -134,6 +134,20 @@ const auto instructionMap = unordered_map<string, Instruction::Type>{
 	{"fastc",   Instruction::FASTC},
 };
 
+auto DataType::fromName(const string& name)->DataType::Type
+{
+	if (name.size() == 2 && name[0] == 'D') {
+		switch (name[1]) {
+		case 'B': return DataType::DB;
+		case 'W': return DataType::DW;
+		case 'D': return DataType::DD;
+		case 'Q': return DataType::DQ;
+		case 'S': return DataType::DS;
+		}
+	}
+	return DataType::MAX;
+}
+
 auto Keyword::fromName(const string& name)->Keyword::Type
 {
 	static_assert(keywords.size() == Keyword::MAX);

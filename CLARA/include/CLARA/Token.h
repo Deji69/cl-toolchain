@@ -8,7 +8,8 @@ namespace CLARA::CLASM {
 struct Label;
 
 enum class TokenType {
-	EOL,
+	EndOfLine,
+	EndOfFile,
 	WhiteSpace,
 	Separator,
 	Directive,
@@ -19,6 +20,7 @@ enum class TokenType {
 		Label,
 		Mnemonic,
 		Instruction,
+		DataType,
 	Numeric, // generic, parsed form of one of:
 		HexLiteral,
 		IntegerLiteral,
@@ -27,18 +29,19 @@ enum class TokenType {
 
 using TokenAnnotation = variant<
 	monostate,
-	uint8_t, int8_t, uint16_t, int16_t, uint32_t, int32_t, uint64_t, int64_t,
+	uint8, int8, uint16, int16, uint32, int32, uint64, int64,
 	float, double,
 	string,
 	const Label*,
 	Keyword::Type,
 	Segment::Type,
 	Mnemonic::Type,
-	Instruction::Type
+	Instruction::Type,
+	DataType::Type
 >;
 
 struct Token : public Source::Token {
-	TokenType type = TokenType::EOL;
+	TokenType type = TokenType::EndOfLine;
 	TokenAnnotation annotation;
 
 	Token() = default;
@@ -61,8 +64,10 @@ template<>
 inline auto CLARA::to_string(CLASM::TokenType type)
 {
 	switch (type) {
-	case CLASM::TokenType::EOL:
-		return "end-of-line"s;
+	case CLASM::TokenType::EndOfLine:
+		return "end of line"s;
+	case CLASM::TokenType::EndOfFile:
+		return "end of file"s;
 	case CLASM::TokenType::WhiteSpace:
 		return "white space"s;
 	case CLASM::TokenType::Separator:
@@ -90,6 +95,8 @@ inline auto CLARA::to_string(CLASM::TokenType type)
 		return "floating-point literal"s;
 	case CLASM::TokenType::String:
 		return "string literal"s;
+	case CLASM::TokenType::DataType:
+		return "data type"s;
 	}
 
 	throw std::invalid_argument("Unhandled token type name");

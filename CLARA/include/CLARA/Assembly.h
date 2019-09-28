@@ -32,6 +32,16 @@ public:
 	static auto fromName(string_view)->Type;
 };
 
+class DataType {
+public:
+	enum Type {
+		DB, DW, DD, DQ, DS, MAX
+	};
+
+public:
+	static auto fromName(const string&)->Type;
+};
+
 class Keyword {
 public:
 	enum Type {

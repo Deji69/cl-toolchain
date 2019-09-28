@@ -4,6 +4,7 @@ include(Catch)
 
 ## Build
 set(CLARA_TESTS_SOURCES
+	"src/ParserHelper.h"
 	"src/main.cpp"
 	"src/AssemblyTest.cpp"
 	"src/CompilerTest.cpp"
@@ -16,7 +17,7 @@ target_link_libraries(clara_tests ${CLARA_TARGET_NAME} Catch2::Catch2 perfvect::
 target_compile_definitions(clara_tests PUBLIC _SILENCE_CXX17_RESULT_OF_DEPRECATION_WARNING)
 
 if(MSVC)
-	target_compile_options(clara_tests PRIVATE /W4 /WX)
+	target_compile_options(clara_tests PRIVATE /W4 /WX /JMC)
 else()
 	target_compile_options(clara_tests PRIVATE -Wall -Wextra -pedantic -Werror)
 endif()

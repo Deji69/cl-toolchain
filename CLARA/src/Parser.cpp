@@ -27,7 +27,7 @@ struct Continue {
 	Continue(Token token) : tokens({token})
 	{ }
 
-	Continue(Token&& token) : tokens({move(token)})
+	Continue(Token&& token) : tokens({token})
 	{ }
 
 	auto add(const Token& token)
@@ -38,11 +38,6 @@ struct Continue {
 	auto add(const Tokens& newTokens)
 	{
 		tokens.insert(tokens.end(), newTokens.begin(), newTokens.end());
-	}
-
-	auto toVector()->TokenVec
-	{
-		return TokenVec(tokens.begin(), tokens.end());
 	}
 };
 
@@ -61,7 +56,8 @@ struct Finish {
 
 	auto& merge(const Finish& other)
 	{
-		reports.insert(reports.end(), other.reports.begin(), other.reports.end());
+		if (reports.empty())
+			reports = move(other.reports);
 		return *this;
 	}
 
@@ -142,12 +138,12 @@ struct State {
 	small_vector<Token*> unresolvedLabelTokens;
 	std::unordered_multimap<string, size_t> unresolvedLabelTokenNameMap;
 
-	auto defineLabel(string name, Token& token)->pair<Label&, bool>
+	auto defineLabel(string name, Token& token, Segment::Type segment)->pair<Label&, bool>
 	{
 		auto idx = info.labels.size();
 		auto res = info.labelMap.emplace(name, idx);
 		auto label = res.second
-			? info.labels.emplace_back(make_unique<Label>(Label{name, token})).get()
+			? info.labels.emplace_back(make_unique<Label>(Label{name, token, segment})).get()
 			: info.labels[res.first->second].get();
 		auto range = unresolvedLabelTokenNameMap.equal_range(name);
 		
@@ -155,8 +151,11 @@ struct State {
 			unresolvedLabelTokens[it->second]->annotation.emplace<const Label*>(info.labels[it->second].get());
 		}
 
-		unresolvedLabelTokenNameMap.erase(range.first, range.second);
+		if (res.second)
+			label->segment = segment;
+
 		token.annotation.emplace<const Label*>(label);
+		unresolvedLabelTokenNameMap.erase(range.first, range.second);
 		return pair<Label&, bool>(*label, res.second);
 	}
 
@@ -176,45 +175,74 @@ struct State {
 auto parseIdentifier(const State& state, Token&& token)->ParseState
 {
 	auto id = string(token.text);
+
+	auto getKeyword = [&]() {
+		if (auto kw = Keyword::fromName(id); kw != Keyword::MAX) {
+			token.type = TokenType::Keyword;
+			token.annotation.emplace<Keyword::Type>(kw);
+			return true;
+		}
+		return false;
+	};
+
+	auto getDataType = [&]() {
+		if (auto dt = DataType::fromName(id); dt != DataType::MAX) {
+			token.type = TokenType::DataType;
+			token.annotation.emplace<DataType::Type>(dt);
+			return true;
+		}
+		return false;
+	};
+
+	auto getMnemonic = [&]() {
+		if (auto mnemonic = Mnemonic::fromName(id); mnemonic != Mnemonic::MAX) {
+			token.type = TokenType::Mnemonic;
+			token.annotation.emplace<Mnemonic::Type>(mnemonic);
+			return true;
+		}
+		return false;
+	};
+
+	auto getInstruction = [&]() {
+		if (auto insn = Instruction::fromName(id); insn != Instruction::MAX) {
+			token.type = TokenType::Instruction;
+			token.annotation.emplace<Instruction::Type>(insn);
+			return true;
+		}
+		return false;
+	};
+
+	if (state.segment == Segment::Data) {
+		if (getDataType())
+			return Continue(token);
+	}
 	
-	if (auto kw = Keyword::fromName(id); kw != Keyword::MAX) {
-		token.type = TokenType::Keyword;
-		token.annotation.emplace<Keyword::Type>(kw);
+	if (
+		getKeyword() ||
+		getMnemonic() ||
+		getInstruction()
+	)
 		return Continue(token);
-	}
-
-	if (auto mnemonic = Mnemonic::fromName(id); mnemonic != Mnemonic::MAX) {
-		token.type = TokenType::Mnemonic;
-		token.annotation.emplace<Mnemonic::Type>(mnemonic);
-		return Continue(token);
-	}
-
-	if (auto insn = Instruction::fromName(id); insn != Instruction::MAX) {
-		token.type = TokenType::Instruction;
-		token.annotation.emplace<Instruction::Type>(insn);
-		return Continue(token);
-	}
 
 	token.annotation.emplace<string>(move(id));
 
-	if (is<Continue>(state.state)) {
+	if (is<Continue>(state.state))
 		return Continue(token);
-	}
-
 	return Finish(token);
 }
 
 auto parseSegment(const State& state, Token&& token)->ParseState
 {
-	if (is<Continue>(state.state)) {
-		return Finish().error(token, diagnose<DiagCode::UnexpectedSegmentAfterTokens>());
-	}
+	auto result = Finish(move(token));
+
+	if (is<Continue>(state.state) && state.segment != Segment::Data)
+		return result.error(token, diagnose<DiagCode::UnexpectedSegmentAfterTokens>());
 
 	auto id = token.text.substr(1);
 
 	if (auto segment = Segment::fromName(id); segment != Segment::MAX) {
-		token.annotation = segment;
-		return Finish(token);
+		result.token->annotation = segment;
+		return result;
 	}
 
 	return Finish().error(token, diagnose<DiagCode::InvalidSegment>());
@@ -358,9 +386,8 @@ auto resolveIntegerAnnotation(Token& token, uint64_t num, bool negative)->TokenA
 	return TokenAnnotation{};
 }
 
-auto parseNumeric(const State&, Token&& token)->ParseState
+auto parseNumeric(const State& state, Token&& token)->ParseState
 {
-	Finish result;
 	auto literal = token.text;
 	auto negative = literal[0] == '-';
 	
@@ -383,20 +410,42 @@ auto parseNumeric(const State&, Token&& token)->ParseState
 		}
 	}
 	
+	Finish result;
+
+	token.type = TokenType::Numeric;
+
 	if (is<monostate>(token.annotation)) {
 		result.error(token, diagnose<DiagCode::InvalidNumericLiteral>());
 	}
-	
-	token.type = TokenType::Numeric;
+	else if (is<Continue>(state.state)) {
+		return Continue(token);
+	}
+
 	result.token = move(token);
 	return result;
+}
+
+auto preParseToken(const State& state, const Token& token)->ParseState
+{
+	if (state.segment == Segment::Data && is<Continue>(state.state)) {
+		switch (token.type) {
+		default: break;
+		case TokenType::Segment: return Finish();
+		}
+	}
+	return Continue();
 }
 
 auto parseToken(const State& state, Token&& token)->ParseState
 {
 	switch (token.type) {
 	default: break;
-	case TokenType::EOL: return Finish();
+	case TokenType::EndOfLine:
+		if (state.segment == Segment::Data && is<Continue>(state.state)) {
+			return Continue();
+		}
+	case TokenType::EndOfFile:
+		return Finish();
 	case TokenType::Identifier: return parseIdentifier(state, forward<Token>(token));
 	case TokenType::Segment: return parseSegment(state, forward<Token>(token));
 	case TokenType::String: return parseString(state, forward<Token>(token));
@@ -405,6 +454,9 @@ auto parseToken(const State& state, Token&& token)->ParseState
 	case TokenType::IntegerLiteral:
 		return parseNumeric(state, forward<Token>(token));
 	case TokenType::Label:
+		if (state.segment == Segment::Data) {
+			return Continue(token);
+		}
 		if (is<Continue>(state.state)) {
 			return Finish().error(forward<Token>(token), diagnose<DiagCode::UnexpectedLabelAfterTokens>());
 		}
@@ -593,6 +645,30 @@ auto parseKeywordLine(State& state, const TokenVec& tokens)->ParseResult
 	return Error{tokens[0], diagnose<DiagCode::InvalidIdentifier>()};
 }
 
+auto parseDataDeclarationLine(State& parser, Continue&& state)->ParseState
+{
+	if (state.tokens.empty())
+		return Finish();
+
+	auto& tokens = state.tokens;
+	auto res = ParseResult(Success());
+
+	if (tokens[0].type == TokenType::Label) {
+		auto name = string(tokens[0].text.substr(0, tokens[0].text.size() - 1));
+		auto& token = parser.info.tokens->push(move(tokens[0]));
+		auto res = parser.defineLabel(name, token, parser.segment);
+
+		for (auto it = tokens.begin() + 1; it != tokens.end(); ++it) {
+			parser.info.tokens->push(move(*it));
+		}
+
+		if (!res.second) {
+			return Finish().error(token, diagnose<DiagCode::LabelRedefinition>(res.first));
+		}
+	}
+	return Finish().expect(TokenType::EndOfLine);
+}
+
 auto parseLine(State& parser, Finish&& state)->ParseState
 {
 	if (!state.token) {
@@ -610,14 +686,14 @@ auto parseLine(State& parser, Finish&& state)->ParseState
 	case TokenType::Segment:
 		parser.segment = get<Segment::Type>(token->annotation);
 		parser.info.tokens->push(move(*token));
-		return Finish().expect(TokenType::EOL);
+		return Finish().expect(TokenType::EndOfLine);
 
 	case TokenType::Label:
 		{
 			auto name = string(state.token->text.substr(0, state.token->text.size() - 1));
 			token = &parser.info.tokens->push(move(*token));
 
-			auto res = parser.defineLabel(name, *token);
+			auto res = parser.defineLabel(name, *token, parser.segment);
 
 			if (!res.second) {
 				return Finish().error(*token, diagnose<DiagCode::LabelRedefinition>(res.first));
@@ -627,20 +703,23 @@ auto parseLine(State& parser, Finish&& state)->ParseState
 
 	case TokenType::Instruction:
 		parser.info.tokens->push(move(*token));
-		return Finish().expect({TokenType::EOL, make_pair(TokenType::Separator, ","s)});
+		return Finish().expect({TokenType::EndOfLine, make_pair(TokenType::Separator, ","s)});
 	}
 
-	auto& addedToken = parser.info.tokens->push(move(*token));
-	return Finish().error(addedToken,diagnose<DiagCode::UnexpectedToken>(addedToken.type));
+	parser.info.tokens->push(move(*token));
+	return Finish();
+	//return Finish().error(addedToken, diagnose<DiagCode::UnexpectedToken>(addedToken.type));
 }
 
 auto parseLine(State& parser, Continue&& state)->ParseState
 {
-	auto tokens = state.toVector();
+	if (parser.segment == Segment::Data)
+		return parseDataDeclarationLine(parser, std::move(state));
 
-	if (tokens.empty()) {
+	if (state.tokens.empty())
 		return Finish();
-	}
+
+	auto& tokens = state.tokens;
 
 	auto seperable = false;
 	auto res = ParseResult(Success());
@@ -677,8 +756,8 @@ auto parseLine(State& parser, Continue&& state)->ParseState
 	}
 
 	if (seperable)
-		return Finish().expect({TokenType::EOL, make_pair(TokenType::Separator, ","s)});
-	return Finish().expect(TokenType::EOL);
+		return Finish().expect({TokenType::EndOfLine, make_pair(TokenType::Separator, ","s)});
+	return Finish().expect(TokenType::EndOfLine);
 }
 
 auto parseFinish(State& state)->ParseState
@@ -883,7 +962,7 @@ auto Report::fatal(const Source::Token& token, Diagnosis&& diagnosis)->Report
 }
 
 const auto lexRules = initializer_list<LexRule>{
-	{TokenType::EOL, lexNewline},
+	{TokenType::EndOfLine, lexNewline},
 	{TokenType::WhiteSpace, lexComment},
 	{TokenType::WhiteSpace, lexWhitespaceNoNewlines},
 	{TokenType::Separator, lexSeparator},
@@ -931,9 +1010,9 @@ auto getExpectedTokenError(const Expected& expect, const Token& token)->optional
 auto& addExpectationsForSegment(Finish& state, Segment::Type segment)
 {
 	switch (segment) {
-	case Segment::MAX: return state.expect({TokenType::EOL, TokenType::Identifier, TokenType::Segment});
-	case Segment::Code: return state.expect({TokenType::EOL, TokenType::Identifier, TokenType::Label, TokenType::Segment});
-	case Segment::Data: return state.expect({TokenType::EOL, TokenType::Label, TokenType::Segment});
+	case Segment::MAX: return state.expect({TokenType::EndOfFile, TokenType::EndOfLine, TokenType::Identifier, TokenType::Segment});
+	case Segment::Code: return state.expect({TokenType::EndOfFile, TokenType::EndOfLine, TokenType::Identifier, TokenType::Label, TokenType::Segment});
+	case Segment::Data: return state.expect({TokenType::EndOfFile, TokenType::EndOfLine, TokenType::Label, TokenType::Segment});
 	}
 	return state;
 }
@@ -1025,32 +1104,62 @@ auto tokenize(const Options& options, shared_ptr<const Source> source)->Result
 		return options.reporter;
 	})();
 
-	auto step = [=, &parserState](ParseState state, size_t offset, optional<LexResult> res)->ParseState {
+	auto reportState = [&](ParseState&& state)->ParseState&& {
+		if (auto fatal = get_if<Fatal>(&state)) {
+			++result.numErrors;
+			result.reports.emplace_back(move(fatal->error));
+			result.hadFatal = true;
+			reporter.fatal(fatal->error);
+			return move(state);
+		}
+
+		if (auto finish = get_if<Finish>(&state)) {
+			if (!finish->reports.empty()) {
+				for (auto& report : finish->reports) {
+					reporter.report(report.type, report);
+
+					if (report.type == ReportType::Error || report.type == ReportType::Fatal) {
+						++result.numErrors;
+
+						if (report.type == ReportType::Fatal)
+							result.hadFatal = true;
+					}
+				}
+
+				result.reports.insert(result.reports.end(), make_move_iterator(finish->reports.begin()), make_move_iterator(finish->reports.end()));
+				finish->reports.clear();
+			}
+		}
+		return move(state);
+	};
+
+	auto step = [&](size_t offset, optional<LexResult> res)->ParseState {
 		if (!res) {
 			auto delimitedToken = source->getToken(offset);
-			return Fatal{move(delimitedToken), diagnose<DiagCode::UnexpectedLexeme>()};
+			return reportState(
+				Fatal{move(delimitedToken), diagnose<DiagCode::UnexpectedLexeme>()}
+			);
 		}
 
 		auto token = Token(source.get(), res->type, offset, res->length);
 
 		if (res->type != TokenType::WhiteSpace) {
-			if (ts->empty() || res->type != TokenType::EOL || !ts->back().is(TokenType::EOL)) {
-				return std::visit(visitor{
+			if (ts->empty() || res->type != TokenType::EndOfLine || !ts->back().is(TokenType::EndOfLine)) {
+				auto postParseVisitor = visitor{
 					[&](Continue&& newState)->ParseState {
-						if (auto cont = get_if<Continue>(&state)) {
+						if (auto cont = get_if<Continue>(&parserState.state)) {
 							cont->add(newState.tokens);
-							return state;
+							return parserState.state;
 						}
 						return move(newState);
 					},
 					[&](Finish&& newState)->ParseState {
 						auto nextState = ([&]()->ParseState {
-							auto parseLineState = ParseState();
-							if (auto cont = get_if<Continue>(&state)) {
+							if (auto cont = get_if<Continue>(&parserState.state)) {
 								if (newState.token) cont->add(*newState.token);
-								
-								parseLineState = parseLine(parserState, move(*cont));
-								
+
+								auto parseLineState = parseLine(parserState, move(*cont));
+
 								if (auto parseLineFinished = get_if<Finish>(&parseLineState)) {
 									return newState.merge(*parseLineFinished);
 								}
@@ -1064,7 +1173,7 @@ auto tokenize(const Options& options, shared_ptr<const Source> source)->Result
 								addExpectationsForSegment(*finish, parserState.segment);
 						}
 
-						if (auto finish = get_if<Finish>(&state)) {
+						if (auto finish = get_if<Finish>(&parserState.state)) {
 							if (finish->expected && !options.testForceTokenization) {
 								if (auto error = getExpectedTokenError(*finish->expected, token))
 									return finish->report(*error);
@@ -1076,56 +1185,41 @@ auto tokenize(const Options& options, shared_ptr<const Source> source)->Result
 					[](Fatal&& newState)->ParseState {
 						return move(newState);
 					}
-				}, parseToken(parserState, move(token)));
-			}
-		}
-
-		return state;
-	};
-
-	auto reportState = [&](ParseState&& state)->ParseState {
-		if (auto fatal = get_if<Fatal>(&state)) {
-			++result.numErrors;
-			result.reports.emplace_back(fatal->error);
-			result.hadFatal = true;
-			reporter.fatal(fatal->error);
-			return move(state);
-		}
-
-		if (auto finish = get_if<Finish>(&state)) {
-			for (auto& report : finish->reports) {
-				reporter.report(report.type, report);
-
-				if (report.type == ReportType::Error || report.type == ReportType::Fatal) {
-					++result.numErrors;
-
-					if (report.type == ReportType::Fatal)
-						result.hadFatal = true;
+				};
+				if (is<Continue>(parserState.state)) {
+					parserState.state = reportState(
+						std::visit(postParseVisitor, preParseToken(parserState, token))
+					);
 				}
+				return reportState(
+					std::visit(postParseVisitor, parseToken(parserState, move(token)))
+				);
 			}
-
-			result.reports.insert(result.reports.end(), make_move_iterator(finish->reports.begin()), make_move_iterator(finish->reports.end()));
 		}
-		return move(state);
+
+		return reportState(move(parserState.state));
 	};
 
 	while (offset < code.size()) {
 		auto res = lexOneOf(code.substr(offset), lexRules);
-		parserState.state = reportState(step(parserState.state, offset, res));
+		parserState.state = step(offset, res);
 
 		if (result.hadFatal) break;
 
 		offset += res->length;
 	}
 
-	if (ts->empty() || !ts->back().is(TokenType::EOL)) {
-		if (!result.hadFatal) {
-			auto res = LexResult{TokenType::EOL, 0};
-			parserState.state = reportState(step(parserState.state, offset, res));
+	if (!result.hadFatal) {
+		if (!ts->empty() && ts->back().type != TokenType::EndOfLine) {
+			auto res = LexResult{TokenType::EndOfLine, 0};
+			parserState.state = reportState(step(offset, res));
 		}
 
-		ts->push(source.get(), TokenType::EOL, offset, code.substr(offset, 0));
+		auto res = LexResult{TokenType::EndOfFile, 0};
+		parserState.state = reportState(step(offset, res));
 	}
+
+	ts->push(source.get(), TokenType::EndOfFile, offset, code.substr(offset, 0));
 
 	parserState.state = reportState(parseFinish(parserState));
 

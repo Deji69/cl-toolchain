@@ -1,57 +1,10 @@
 #include <catch.hpp>
 #include <CLARA/Source.h>
 #include <CLARA/Parser.h>
+#include "ParserHelper.h"
 
 using namespace CLARA;
 using namespace CLARA::CLASM;
-
-template<typename T>
-auto isOneOf(const T& value, initializer_list<T> oneOfThese) {
-	for (auto& one : oneOfThese) {
-		if (value == one)
-			return true;
-	}
-	return false;
-}
-
-auto checkResult(const Parser::Result& res) {
-	for (auto& report : res.reports) {
-		UNSCOPED_INFO(string{report.diagnosis.getName()} + " ["s + to_string(report.diagnosis.getCodeInt()) + "]: "s + string{report.token.text});
-	}
-	return res.ok();
-}
-
-auto getParseOpts(bool forceTokenization = false) {
-	// disabling reporting errors to stdout/stderr as it will mess with test results
-	auto options = Parser::Options{};
-	options.errorReporting = false;
-	options.testForceTokenization = forceTokenization;
-	return options;
-}
-
-struct ParsingTestHelper {
-	Parser::Options options;
-	Parser::Result result;
-	shared_ptr<TokenStream> tokensPtr;
-
-	ParsingTestHelper(bool forceTokenization = false) : options(getParseOpts(forceTokenization))
-	{ }
-
-	auto parse(string code) {
-		return Parser::tokenize(options, make_shared<Source>("test", code));
-	}
-
-	auto& parseExpect(string code, initializer_list<TokenType> types) {
-		result = parse(code);
-		tokensPtr = result.info.tokens;
-		REQUIRE(tokensPtr->size() >= types.size());
-		auto i = 0_uz;
-		for (auto type : types) {
-			REQUIRE((*tokensPtr)[i++].type == type);
-		}
-		return *tokensPtr;
-	}
-};
 
 auto lexerHelper = ParsingTestHelper(true);
 auto helper = ParsingTestHelper();
@@ -64,13 +17,13 @@ auto parseAnnotation(string code, size_t idx) {
 	return (*res.info.tokens)[idx].annotation;
 }
 
-TEST_CASE("Lexer tokenizes final newline", "[Lexer]") {
+TEST_CASE("Lexer tokenizes EOF", "[Lexer]") {
 	auto res = lexerHelper.parse("\r\n\r\n");
 	REQUIRE(checkResult(res));
 
 	auto& tokens = *res.info.tokens;
 	REQUIRE(tokens.size() == 1_uz);
-	CHECK(tokens[0].type == TokenType::EOL);
+	CHECK(tokens[0].type == TokenType::EndOfFile);
 }
 
 TEST_CASE("Lexer skips whitespace", "[Lexer]") {
@@ -79,7 +32,7 @@ TEST_CASE("Lexer skips whitespace", "[Lexer]") {
 
 	auto& tokens = *res.info.tokens;
 	REQUIRE(tokens.size() == 1_uz);
-	CHECK(tokens[0].type == TokenType::EOL);
+	CHECK(tokens[0].type == TokenType::EndOfFile);
 	CHECK(tokens[0].text.empty());
 }
 
@@ -171,7 +124,7 @@ TEST_CASE("Parser enforces start of line tokens per segment", "[Parser]") {
 
 		for (auto& expect : expected) {
 			REQUIRE(is<TokenType>(expect));
-			CHECK(isOneOf(get<TokenType>(expect), {TokenType::EOL, TokenType::Identifier, TokenType::Segment}));
+			CHECK(isOneOf(get<TokenType>(expect), {TokenType::EndOfLine, TokenType::EndOfFile, TokenType::Identifier, TokenType::Segment}));
 		}
 	}
 
@@ -186,7 +139,7 @@ TEST_CASE("Parser enforces start of line tokens per segment", "[Parser]") {
 
 		for (auto& expect : expected) {
 			REQUIRE(is<TokenType>(expect));
-			CHECK(isOneOf(get<TokenType>(expect), {TokenType::EOL, TokenType::Identifier, TokenType::Label, TokenType::Segment}));
+			CHECK(isOneOf(get<TokenType>(expect), {TokenType::EndOfFile, TokenType::EndOfLine, TokenType::Identifier, TokenType::Label, TokenType::Segment}));
 		}
 	}
 
@@ -201,7 +154,7 @@ TEST_CASE("Parser enforces start of line tokens per segment", "[Parser]") {
 
 		for (auto& expect : expected) {
 			REQUIRE(is<TokenType>(expect));
-			CHECK(isOneOf(get<TokenType>(expect), {TokenType::EOL, TokenType::Label, TokenType::Segment}));
+			CHECK(isOneOf(get<TokenType>(expect), {TokenType::EndOfFile, TokenType::EndOfLine, TokenType::Label, TokenType::Segment}));
 		}
 	}
 }
@@ -422,6 +375,25 @@ TEST_CASE("Parser resolves mnemonics", "[Parser]") {
 	}
 }
 
+TEST_CASE("Parser parses data segment definitions", "[Parser]") {
+	SECTION("Byte data value") {
+		auto res = helper.parse(".data\nBYTE_VALUE: DB 0xFF");
+		auto& tokens = *res.info.tokens;
+		REQUIRE(checkResult(res));
+		REQUIRE(tokens.size() == 5);
+		CHECK(tokens[0].type == TokenType::Segment);
+		CHECK(tokens[1].type == TokenType::Label);
+		CHECK(tokens[2].type == TokenType::DataType);
+		CHECK(tokens[3].type == TokenType::Numeric);
+		CHECK(is<const Label*>(tokens[1].annotation));
+		CHECK(get<const Label*>(tokens[1].annotation)->segment == Segment::Data);
+		CHECK(is<DataType::Type>(tokens[2].annotation));
+		CHECK(get<DataType::Type>(tokens[2].annotation) == DataType::DB);
+		CHECK(is<uint8>(tokens[3].annotation));
+		CHECK(get<uint8>(tokens[3].annotation) == 0xFF);
+	}
+}
+
 TEST_CASE("Error unexpected lexeme", "[Error Handling]") {
 	auto res = lexerHelper.parse("`123");
 	REQUIRE(res.hadFatal);
@@ -429,13 +401,13 @@ TEST_CASE("Error unexpected lexeme", "[Error Handling]") {
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::UnexpectedLexeme);
 }
 
-TEST_CASE("Error expected EOL after segment", "[Error Handling]") {
+TEST_CASE("Error expected EndOfLine after segment", "[Error Handling]") {
 	auto res = helper.parse(".code 1");
 	REQUIRE(res.numErrors == 1);
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::ExpectedToken);
 	CHECK(res.reports[0].diagnosis.get<DiagCode::ExpectedToken>().given == TokenType::Numeric);
 	auto& diagnosis = res.reports[0].diagnosis.get<DiagCode::ExpectedToken>();
-	CHECK(get<TokenType>(diagnosis.expected) == TokenType::EOL);
+	CHECK(get<TokenType>(diagnosis.expected) == TokenType::EndOfLine);
 }
 
 TEST_CASE("Error unexpected separator", "[Error Handling]") {
