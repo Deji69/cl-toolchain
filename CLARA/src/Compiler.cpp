@@ -5,31 +5,31 @@
 using namespace CLARA;
 using namespace CLARA::CLASM;
 
+namespace CLARA::CLASM::Compiler {
+
 using TokenIterator = vector<Token>::const_iterator;
 
 struct CompilerContext {
-	Reporter& report;
+	const Options& options;
+	const Reporter& report;
 	IBinaryOutput& output;
 	const TokenStream& tokenStream;
 	TokenIterator it;
 	Segment::Type segment = Segment::MAX;
 
-	CompilerContext(Reporter& report, IBinaryOutput& out, const TokenStream& ts) :
-		report(report), output(out), tokenStream(ts)
+	CompilerContext(const Options& opts, IBinaryOutput& out, const TokenStream& ts) :
+		options(opts), report(opts.reporter), output(out), tokenStream(ts)
 	{
 		it = tokenStream.all().begin();
 	}
 
 	auto compileInstruction()
-	{ }
+	{}
 };
 
-Compiler::Compiler(ReporterFunc reporter): report(reporter)
-{ }
-
-auto Compiler::compile(const TokenStream& ts, IBinaryOutput& out)->void
+auto compile(const Options& opts, const TokenStream& ts, IBinaryOutput& out)->Result
 {
-	CompilerContext ctx{report, out, ts};
+	CompilerContext ctx{opts, out, ts};
 
 	while (ctx.it != ts.all().end()) {
 		switch (ctx.it->type) {
@@ -38,20 +38,23 @@ auto Compiler::compile(const TokenStream& ts, IBinaryOutput& out)->void
 				ctx.segment = segment;
 			}
 			else {
-				report.error("Invalid segment name"sv);
+				ctx.report.error("Invalid segment name"sv);
 			}
 			break;
 
 		case TokenType::Instruction:
-			ctx.compileInstruction();
+			//ctx.compileInstruction(ctx);
 			break;
 
 		default:
-			report.error("Unexpected token type");
+			ctx.report.error("Unexpected token type");
 			break;
 		}
 		++ctx.it;
 	}
 
-	out.writeU8(Instruction::NOP);
+	out.write8(Instruction::NOP);
+	return Result{};
+}
+
 }

@@ -1,10 +1,10 @@
 #pragma once
-#include <CLARA/Common.h>
-#include <CLARA/TokenStream.h>
 #include <CLARA/Assembly.h>
-#include <CLARA/Reporter.h>
+#include <CLARA/Common.h>
 #include <CLARA/Diagnostic.h>
+#include <CLARA/Reporter.h>
 #include <CLARA/Source.h>
+#include <CLARA/TokenStream.h>
 #include <CLARA/Label.h>
 
 namespace CLARA::CLASM::Parser {
@@ -28,10 +28,17 @@ struct Report {
 	static auto fatal(const Source::Token&, Diagnosis&&)->Report;
 };
 
+struct SegmentInfo {
+	Segment::Type type;
+	TokenStream::const_iterator begin;
+	TokenStream::const_iterator end;
+};
+
 struct ParseInfo {
 	shared_ptr<TokenStream> tokens;
 	vector<unique_ptr<Label>> labels;
 	unordered_map<string, size_t> labelMap;
+	vector<SegmentInfo> segments;
 };
 
 struct Result {

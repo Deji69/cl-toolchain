@@ -1,8 +1,8 @@
 #pragma once
 #include <catch.hpp>
 #include <initializer_list>
-#include <CLARA/Source.h>
 #include <CLARA/Parser.h>
+#include <CLARA/Source.h>
 
 using namespace CLARA;
 using namespace CLARA::CLASM;

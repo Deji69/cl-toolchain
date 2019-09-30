@@ -134,9 +134,9 @@ using ParseResult = variant<Success, Error, small_vector<Error>>;
 struct State {
 	ParseInfo& info;
 	ParseState state;
-	Segment::Type segment = Segment::MAX;
 	small_vector<Token*> unresolvedLabelTokens;
 	std::unordered_multimap<string, size_t> unresolvedLabelTokenNameMap;
+	Segment::Type segment = Segment::MAX;
 
 	auto defineLabel(string name, Token& token, Segment::Type segment)->pair<Label&, bool>
 	{
@@ -655,15 +655,15 @@ auto parseDataDeclarationLine(State& parser, Continue&& state)->ParseState
 
 	if (tokens[0].type == TokenType::Label) {
 		auto name = string(tokens[0].text.substr(0, tokens[0].text.size() - 1));
-		auto& token = parser.info.tokens->push(move(tokens[0]));
-		auto res = parser.defineLabel(name, token, parser.segment);
+		auto token = parser.info.tokens->push(move(tokens[0]));
+		auto res = parser.defineLabel(name, *token, Segment::Data);
 
 		for (auto it = tokens.begin() + 1; it != tokens.end(); ++it) {
 			parser.info.tokens->push(move(*it));
 		}
 
 		if (!res.second) {
-			return Finish().error(token, diagnose<DiagCode::LabelRedefinition>(res.first));
+			return Finish().error(*token, diagnose<DiagCode::LabelRedefinition>(res.first));
 		}
 	}
 	return Finish().expect(TokenType::EndOfLine);
@@ -681,17 +681,26 @@ auto parseLine(State& parser, Finish&& state)->ParseState
 	default: break;
 
 	case TokenType::Identifier:
-		return Finish().error(parser.info.tokens->push(move(*token)), diagnose<DiagCode::InvalidIdentifier>());
+		return Finish().error(*parser.info.tokens->push(move(*token)), diagnose<DiagCode::InvalidIdentifier>());
 
 	case TokenType::Segment:
-		parser.segment = get<Segment::Type>(token->annotation);
-		parser.info.tokens->push(move(*token));
+		{
+			parser.segment = get<Segment::Type>(token->annotation);
+			
+			auto it = parser.info.tokens->push(move(*token));
+			
+			if (!parser.info.segments.empty()) {
+				parser.info.segments.back().end = it;
+			}
+
+			parser.info.segments.emplace_back(parser.segment, it, parser.info.tokens->end());
+		}
 		return Finish().expect(TokenType::EndOfLine);
 
 	case TokenType::Label:
 		{
 			auto name = string(state.token->text.substr(0, state.token->text.size() - 1));
-			token = &parser.info.tokens->push(move(*token));
+			token = &*parser.info.tokens->push(move(*token));
 
 			auto res = parser.defineLabel(name, *token, parser.segment);
 
@@ -708,7 +717,6 @@ auto parseLine(State& parser, Finish&& state)->ParseState
 
 	parser.info.tokens->push(move(*token));
 	return Finish();
-	//return Finish().error(addedToken, diagnose<DiagCode::UnexpectedToken>(addedToken.type));
 }
 
 auto parseLine(State& parser, Continue&& state)->ParseState
@@ -748,10 +756,10 @@ auto parseLine(State& parser, Continue&& state)->ParseState
 	}
 
 	for (auto& token : get<Success>(res).tokens) {
-		auto& addedToken = parser.info.tokens->push(move(token));
+		auto addedToken = parser.info.tokens->push(move(token));
 
-		if (addedToken.type == TokenType::Label) {
-			parser.referenceLabel(addedToken);
+		if (addedToken->type == TokenType::Label) {
+			parser.referenceLabel(*addedToken);
 		}
 	}
 

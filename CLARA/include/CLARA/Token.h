@@ -1,6 +1,6 @@
 #pragma once
-#include <CLARA/Common.h>
 #include <CLARA/Assembly.h>
+#include <CLARA/Common.h>
 #include <CLARA/Source.h>
 
 namespace CLARA::CLASM {
@@ -45,6 +45,7 @@ struct Token : public Source::Token {
 	TokenAnnotation annotation;
 
 	Token() = default;
+	Token(TokenType type, TokenAnnotation annotation);
 	Token(const Source* source, TokenType type, size_t offset = 0, string_view text = string_view{});
 	Token(const Source* source, TokenType type, size_t offset, size_t length);
 

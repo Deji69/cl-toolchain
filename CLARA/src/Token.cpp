@@ -14,11 +14,17 @@ auto getAnnotationSize(const TokenAnnotation& annotation) {
 	return 0;
 }
 
+Token::Token(TokenType type, TokenAnnotation annotation) :
+	type(type), annotation(annotation)
+{}
+
 Token::Token(const Source* source, TokenType type, size_t offset, string_view text) :
-	Source::Token(source, offset, text), type(type) {}
+	Source::Token(source, offset, text), type(type)
+{}
 
 Token::Token(const Source* source, TokenType type, size_t offset, size_t length) :
-	Source::Token(source, offset, length), type(type) {}
+	Source::Token(source, offset, length), type(type)
+{}
 
 auto Token::is(TokenType type_) const -> bool { return type == type_; }
 
