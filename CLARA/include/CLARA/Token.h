@@ -7,6 +7,13 @@ namespace CLARA::CLASM {
 
 struct Label;
 
+struct LabelRef {
+	const Label* label;
+
+	LabelRef(const Label* label) : label(label)
+	{}
+};
+
 enum class TokenType {
 	EndOfLine,
 	EndOfFile,
@@ -18,6 +25,7 @@ enum class TokenType {
 	Identifier, // pre-parsed form of one of:
 		Keyword,
 		Label,
+		LabelRef,
 		Mnemonic,
 		Instruction,
 		DataType,
@@ -33,6 +41,7 @@ using TokenAnnotation = variant<
 	float, double,
 	string,
 	const Label*,
+	LabelRef,
 	Keyword::Type,
 	Segment::Type,
 	Mnemonic::Type,
@@ -81,6 +90,8 @@ inline auto CLARA::to_string(CLASM::TokenType type)
 		return "segment"s;
 	case CLASM::TokenType::Label:
 		return "label"s;
+	case CLASM::TokenType::LabelRef:
+		return "label reference"s;
 	case CLASM::TokenType::Identifier:
 		return "identifier"s;
 	case CLASM::TokenType::Mnemonic:

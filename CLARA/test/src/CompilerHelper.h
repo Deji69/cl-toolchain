@@ -57,6 +57,18 @@ struct MockOutputHandler : public IBinaryOutput {
 		write8(reinterpret_cast<char*>(&val)[3]);
 	}
 
+	virtual auto write64(uint64_t val)->void override
+	{
+		write8(reinterpret_cast<char*>(&val)[0]);
+		write8(reinterpret_cast<char*>(&val)[1]);
+		write8(reinterpret_cast<char*>(&val)[2]);
+		write8(reinterpret_cast<char*>(&val)[3]);
+		write8(reinterpret_cast<char*>(&val)[4]);
+		write8(reinterpret_cast<char*>(&val)[5]);
+		write8(reinterpret_cast<char*>(&val)[6]);
+		write8(reinterpret_cast<char*>(&val)[7]);
+	}
+
 	virtual auto write(string_view str)->void override
 	{
 		for (auto c : str) {
@@ -64,3 +76,23 @@ struct MockOutputHandler : public IBinaryOutput {
 		}
 	}
 };
+
+inline auto makeParseInfo(initializer_list<tuple<TokenType, TokenAnnotation>> tokenStreamInit)
+{
+	Parser::ParseInfo info;
+	info.tokens = make_unique<TokenStream>(tokenStreamInit);
+	auto segmentBeginIt = info.tokens->end();
+	for (auto it = info.tokens->begin(); it != info.tokens->end(); ++it) {
+		if (it->type == TokenType::Segment) {
+			if (segmentBeginIt != info.tokens->end()) {
+				info.segments[get<Segment::Type>(segmentBeginIt->annotation)].back().end = it;
+			}
+
+			auto& seg = info.segments[get<Segment::Type>(it->annotation)].emplace_back();
+			seg.begin = it;
+			seg.end = info.tokens->end();
+			segmentBeginIt = it;
+		}
+	}
+	return info;
+}

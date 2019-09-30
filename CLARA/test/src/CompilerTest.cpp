@@ -10,11 +10,12 @@ using namespace CLARA::CLASM;
 TEST_CASE("compiles nop instruction", "[Compile]")
 {
 	MockOutputHandler out;
-	const auto expected = initializer_list<uint8_t>{0x90};
-	auto ts = TokenStream({
+	const auto expected = initializer_list<uint8_t>{Instruction::NOP};
+	auto parsed = makeParseInfo({
+		{TokenType::Segment, Segment::Code },
 		{TokenType::Instruction, Instruction::NOP}
 	});
 	Compiler::Options opts;
-	Compiler::compile(opts, ts, out);
+	Compiler::compile(opts, parsed, out);
 	REQUIRE(out.check(expected));
 }

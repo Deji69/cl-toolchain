@@ -18,10 +18,6 @@ const auto mnemonics = array<string, Mnemonic::MAX>{
 	/* JMP   */ "jmp",
 	/* CALL  */ "call",
 };
-const auto segmentNames = array<string, Segment::MAX>{
-	/* Code */ "data",
-	/* Data */ "code",
-};
 const auto mnemonicTable = array<vector<InstructionOverload>, static_cast<size_t>(Mnemonic::MAX)>{{
 	/* PUSH */ {
 		{Instruction::PUSHN,  {}},
@@ -174,11 +170,9 @@ auto Mnemonic::fromName(const string& name)->Mnemonic::Type
 
 auto Segment::fromName(string_view name)->Segment::Type
 {
-	static_assert(segmentNames.size() == Segment::MAX);
-	auto idx = findIndexIf(segmentNames.begin(), segmentNames.end(), [&](const auto& val) {
-		return val == name;
-	});
-	return static_cast<Segment::Type>(idx);
+	if (name == "code") return Segment::Code;
+	if (name == "data") return Segment::Data;
+	return Segment::MAX;
 }
 
 const auto noOperands = vector<InstructionOperand>{};

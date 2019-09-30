@@ -56,7 +56,7 @@ public:
 		{
 			if (index >= 0) {
 				++index;
-				if (index >= stream->size())
+				if (index >= static_cast<ptrdiff_t>(stream->size()))
 					index = -1;
 			}
 			return *this;
@@ -104,7 +104,7 @@ public:
 
 		[[nodiscard]] constexpr auto operator==(const iter& other) const noexcept
 		{
-			assert(&stream == &other.stream);
+			assert(stream == other.stream);
 			return index == other.index;
 		}
 

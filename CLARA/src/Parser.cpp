@@ -136,7 +136,7 @@ struct State {
 	ParseState state;
 	small_vector<Token*> unresolvedLabelTokens;
 	std::unordered_multimap<string, size_t> unresolvedLabelTokenNameMap;
-	Segment::Type segment = Segment::MAX;
+	Segment::Type segment = Segment::Header;
 
 	auto defineLabel(string name, Token& token, Segment::Type segment)->pair<Label&, bool>
 	{
@@ -148,7 +148,7 @@ struct State {
 		auto range = unresolvedLabelTokenNameMap.equal_range(name);
 		
 		for (auto it = range.first; it != range.second; ++it) {
-			unresolvedLabelTokens[it->second]->annotation.emplace<const Label*>(info.labels[it->second].get());
+			unresolvedLabelTokens[it->second]->annotation.emplace<LabelRef>(info.labels[it->second].get());
 		}
 
 		if (res.second)
@@ -163,7 +163,7 @@ struct State {
 	{
 		auto it = info.labelMap.find(string(token.text));
 		if (it != info.labelMap.end()) {
-			token.annotation.emplace<const Label*>(info.labels[it->second].get());
+			token.annotation.emplace<LabelRef>(info.labels[it->second].get());
 		}
 		else {
 			unresolvedLabelTokenNameMap.emplace(get<string>(token.annotation), unresolvedLabelTokens.size());
@@ -488,7 +488,7 @@ auto checkOperandType(OperandType type, const Token& token)->ParseResult
 		break;
 
 	case OperandType::REL32:
-		if (token.type != TokenType::Label)
+		if (token.type != TokenType::LabelRef)
 			return Error{token, diagnose<DiagCode::InvalidOperandType>(type)};
 		break;
 
@@ -527,7 +527,7 @@ auto parseInstructionLine(State& state, const TokenVec& tokens)->ParseResult
 				switch (type) {
 				default: break;
 				case OperandType::REL32:
-					token.type = TokenType::Label;
+					token.type = TokenType::LabelRef;
 					break;
 				}
 			}
@@ -618,7 +618,7 @@ auto parseGlobalKeywordLine(State&, const TokenVec& tokens)->ParseResult
 			}
 
 			auto& token = success.addToken(move(*it));
-			token.type = TokenType::Label;
+			token.type = TokenType::LabelRef;
 		}
 
 		if (!errors.empty()) {
@@ -685,15 +685,13 @@ auto parseLine(State& parser, Finish&& state)->ParseState
 
 	case TokenType::Segment:
 		{
-			parser.segment = get<Segment::Type>(token->annotation);
-			
 			auto it = parser.info.tokens->push(move(*token));
-			
-			if (!parser.info.segments.empty()) {
-				parser.info.segments.back().end = it;
-			}
 
-			parser.info.segments.emplace_back(parser.segment, it, parser.info.tokens->end());
+			if (!parser.info.segments[parser.segment].empty())
+				parser.info.segments[parser.segment].back().end = it;
+
+			parser.segment = get<Segment::Type>(it->annotation);
+			parser.info.segments[parser.segment].emplace_back(it, parser.info.tokens->end());
 		}
 		return Finish().expect(TokenType::EndOfLine);
 
@@ -758,7 +756,7 @@ auto parseLine(State& parser, Continue&& state)->ParseState
 	for (auto& token : get<Success>(res).tokens) {
 		auto addedToken = parser.info.tokens->push(move(token));
 
-		if (addedToken->type == TokenType::Label) {
+		if (addedToken->type == TokenType::LabelRef) {
 			parser.referenceLabel(*addedToken);
 		}
 	}
@@ -1018,7 +1016,8 @@ auto getExpectedTokenError(const Expected& expect, const Token& token)->optional
 auto& addExpectationsForSegment(Finish& state, Segment::Type segment)
 {
 	switch (segment) {
-	case Segment::MAX: return state.expect({TokenType::EndOfFile, TokenType::EndOfLine, TokenType::Identifier, TokenType::Segment});
+	case Segment::MAX:
+	case Segment::Header: return state.expect({TokenType::EndOfFile, TokenType::EndOfLine, TokenType::Identifier, TokenType::Segment});
 	case Segment::Code: return state.expect({TokenType::EndOfFile, TokenType::EndOfLine, TokenType::Identifier, TokenType::Label, TokenType::Segment});
 	case Segment::Data: return state.expect({TokenType::EndOfFile, TokenType::EndOfLine, TokenType::Label, TokenType::Segment});
 	}

@@ -18,6 +18,6 @@ struct Result {
 	
 };
 
-auto compile(const Options& options, const TokenStream& tokens, IBinaryOutput& out)->Result;
+auto compile(const Options& options, const CLARA::CLASM::Parser::ParseInfo& tokens, IBinaryOutput& out)->Result;
 
 }

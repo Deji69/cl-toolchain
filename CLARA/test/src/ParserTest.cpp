@@ -313,10 +313,10 @@ TEST_CASE("Parser parses labels", "[Parser]") {
 		REQUIRE(checkResult(res));
 		auto& tokens = *res.info.tokens;
 		REQUIRE(tokens.size() == 5);
-		REQUIRE(is<const Label*>(tokens[3].annotation));
-		auto ref = get<const Label*>(tokens[3].annotation);
-		REQUIRE(ref == res.info.labels[0].get());
-		REQUIRE(ref == get<const Label*>(tokens[1].annotation));
+		REQUIRE(is<LabelRef>(tokens[3].annotation));
+		auto ref = get<LabelRef>(tokens[3].annotation);
+		REQUIRE(ref.label == res.info.labels[0].get());
+		REQUIRE(ref.label == get<const Label*>(tokens[1].annotation));
 	}
 
 	SECTION("Labels can be defined after referencing") {
@@ -324,10 +324,10 @@ TEST_CASE("Parser parses labels", "[Parser]") {
 		REQUIRE(checkResult(res));
 		auto& tokens = *res.info.tokens;
 		REQUIRE(tokens.size() == 5);
-		REQUIRE(is<const Label*>(tokens[2].annotation));
+		REQUIRE(is<LabelRef>(tokens[2].annotation));
 		REQUIRE(is<const Label*>(tokens[3].annotation));
-		auto ref = get<const Label*>(tokens[2].annotation);
-		REQUIRE(ref == get<const Label*>(tokens[3].annotation));
+		auto ref = get<LabelRef>(tokens[2].annotation);
+		REQUIRE(ref.label == get<const Label*>(tokens[3].annotation));
 	}
 }
 
@@ -340,12 +340,12 @@ TEST_CASE("Parser parses keywords", "[Parser]") {
 		REQUIRE(tokens[0].type == TokenType::Keyword);
 		REQUIRE(is<Keyword::Type>(tokens[0].annotation));
 		CHECK(get<Keyword::Type>(tokens[0].annotation) == Keyword::Global);
-		REQUIRE(tokens[1].type == TokenType::Label);
-		REQUIRE(is<const Label*>(tokens[1].annotation));
-		auto ref = get<const Label*>(tokens[1].annotation);
+		REQUIRE(tokens[1].type == TokenType::LabelRef);
+		REQUIRE(is<LabelRef>(tokens[1].annotation));
+		auto ref = get<LabelRef>(tokens[1].annotation);
 		REQUIRE(is<const Label*>(tokens[3].annotation));
-		REQUIRE(ref == get<const Label*>(tokens[3].annotation));
-		CHECK(ref->name == "main");
+		REQUIRE(ref.label == get<const Label*>(tokens[3].annotation));
+		CHECK(ref.label->name == "main");
 	}
 }
 
@@ -459,7 +459,7 @@ TEST_CASE("Error undefined label", "[Error Handling]") {
 	REQUIRE(res.numErrors >= 1);
 	auto& tokens = *res.info.tokens;
 	REQUIRE(tokens.size() >= 3);
-	REQUIRE(tokens[2].type == TokenType::Label);
+	REQUIRE(tokens[2].type == TokenType::LabelRef);
 	REQUIRE(is<string>(tokens[2].annotation));
 	CHECK(get<string>(tokens[2].annotation) == "label");
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::UnresolvedLabelReference);

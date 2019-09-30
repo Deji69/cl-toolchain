@@ -29,7 +29,6 @@ struct Report {
 };
 
 struct SegmentInfo {
-	Segment::Type type;
 	TokenStream::const_iterator begin;
 	TokenStream::const_iterator end;
 };
@@ -38,7 +37,7 @@ struct ParseInfo {
 	shared_ptr<TokenStream> tokens;
 	vector<unique_ptr<Label>> labels;
 	unordered_map<string, size_t> labelMap;
-	vector<SegmentInfo> segments;
+	array<small_vector<SegmentInfo>, Segment::MAX> segments;
 };
 
 struct Result {
