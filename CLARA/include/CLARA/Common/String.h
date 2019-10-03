@@ -76,7 +76,7 @@ auto stringEndsWith(string_view s, string_view::value_type c)->bool;
 auto stringEndsWith(string_view s, const string& v)->bool;
 
 template<typename TInt, size_t TSize = sizeof(TInt)>
-constexpr auto encodeBytesLE(TInt value)->std::enable_if_t<std::is_integral_v<TInt> && TSize <= sizeof(TInt), std::array<char, TSize>>
+constexpr auto encodeBytesLE(TInt value)->std::enable_if_t<std::is_arithmetic_v<TInt> && TSize <= sizeof(TInt), std::array<char, TSize>>
 {
 	auto arr = std::array<char, TSize>{};
 	std::reverse_copy(reinterpret_cast<uint8*>(&value), reinterpret_cast<uint8*>(&value) + TSize, arr.data());
@@ -84,7 +84,7 @@ constexpr auto encodeBytesLE(TInt value)->std::enable_if_t<std::is_integral_v<TI
 }
 
 template<typename TInt, size_t TSize = sizeof(TInt)>
-constexpr auto encodeBytesBE(TInt value)->std::enable_if_t<std::is_integral_v<TInt> && TSize <= sizeof(TInt), std::array<char, TSize>>
+constexpr auto encodeBytesBE(TInt value)->std::enable_if_t<std::is_arithmetic_v<TInt> && TSize <= sizeof(TInt), std::array<char, TSize>>
 {
 	auto arr = std::array<char, TSize>{};
 	std::copy(reinterpret_cast<uint8*>(&value), reinterpret_cast<uint8*>(&value) + TSize, arr.data());
@@ -92,15 +92,15 @@ constexpr auto encodeBytesBE(TInt value)->std::enable_if_t<std::is_integral_v<TI
 }
 
 template<typename TInt, size_t TSize = sizeof(TInt)>
-constexpr auto encodeBytes(TInt value)->std::enable_if_t<std::is_integral_v<TInt>&& TSize <= sizeof(TInt), std::array<char, TSize>>
+constexpr auto encodeBytes(TInt value)->std::enable_if_t<std::is_arithmetic_v<TInt>&& TSize <= sizeof(TInt), std::array<char, TSize>>
 {
 	// C++20 feature supported in MSVC, wait for at least Clang support to remove preprocessor block
 	// Unfortunately preprocessor blocks targetting the Clang compiler cannot be used when using Visual Studio with Clang set as the compiler
 #if 0
 	return std::endian::native == std::endian::little ? encodeBytesLE(value) : encodeBytesBE(value);
 #else
-	auto test = uint16_t{1};
-	return *static_cast<unsigned char*>(static_cast<void*>(&test)) == 1
+	const auto test = uint16_t{1};
+	return *static_cast<const unsigned char*>(static_cast<const void*>(&test)) == 1
 		? encodeBytesLE<TInt, TSize>(value)
 		: encodeBytesBE<TInt, TSize>(value);
 #endif

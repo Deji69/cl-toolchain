@@ -29,15 +29,22 @@ struct Report {
 };
 
 struct SegmentInfo {
-	TokenStream::const_iterator begin;
-	TokenStream::const_iterator end;
+	Segment::Type type;
+	shared_ptr<TokenStream> tokens;
+	size_t size = 0;
 };
 
 struct ParseInfo {
-	shared_ptr<TokenStream> tokens;
 	vector<unique_ptr<Label>> labels;
 	unordered_map<string, size_t> labelMap;
-	array<small_vector<SegmentInfo>, Segment::MAX> segments;
+	array<SegmentInfo, Segment::MAX> segments;
+
+	ParseInfo()
+	{
+		for (auto i = 0; i < Segment::MAX; ++i) {
+			segments[i].type = static_cast<Segment::Type>(i);
+		}
+	}
 };
 
 struct Result {

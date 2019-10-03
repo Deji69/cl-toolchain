@@ -34,7 +34,7 @@ inline auto checkResult(const Parser::Result& res) {
 struct ParsingTestHelper {
 	Parser::Options options;
 	Parser::Result result;
-	shared_ptr<TokenStream> tokensPtr;
+	TokenStream* tokensPtr;
 
 	ParsingTestHelper(bool forceTokenization = false) : options(getParseOpts(forceTokenization)) {}
 
@@ -42,14 +42,35 @@ struct ParsingTestHelper {
 		return Parser::tokenize(options, make_shared<Source>("test", code));
 	}
 
-	auto& parseExpect(string code, initializer_list<TokenType> types) {
-		result = parse(code);
-		tokensPtr = result.info.tokens;
-		REQUIRE(tokensPtr->size() >= types.size());
+	auto parseCode(string code) {
+		return parse(".code\n" + code);
+	}
+
+	auto parseData(string code) {
+		return parse(".data\n" + code);
+	}
+
+	auto& parseExpect(string code, const map<Segment::Type, initializer_list<TokenType>>& segTypes) {
+		result = parse(std::move(code));
 		auto i = 0_uz;
-		for (auto type : types) {
-			REQUIRE((*tokensPtr)[i++].type == type);
+		for (auto& [segment, types] : segTypes) {
+			auto& tokens = *result.info.segments[segment].tokens;
+			REQUIRE(tokens.size() >= types.size());
+			for (auto type : types) {
+				CHECK(tokens[i++].type == type);
+			}
 		}
 		return *tokensPtr;
+	}
+
+	auto& parseExpectCode(string code, initializer_list<TokenType> types) {
+		result = parseCode(std::move(code));
+		auto& tokens = *result.info.segments[Segment::Code].tokens;
+		REQUIRE(tokens.size() >= types.size());
+		auto i = 0_uz;
+		for (auto type : types) {
+			CHECK(tokens[i++].type == type);
+		}
+		return tokens;
 	}
 };

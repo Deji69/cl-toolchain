@@ -11,8 +11,8 @@ TEST_CASE("compiles nop instruction", "[Compile]")
 {
 	MockOutputHandler out;
 	const auto expected = initializer_list<uint8_t>{Instruction::NOP};
-	auto parsed = makeParseInfo({
-		{TokenType::Segment, Segment::Code },
+	const auto parsed = makeParseInfo({
+		{TokenType::Segment, Segment::Code},
 		{TokenType::Instruction, Instruction::NOP}
 	});
 	Compiler::Options opts;

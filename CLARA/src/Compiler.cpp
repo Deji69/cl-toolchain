@@ -21,6 +21,11 @@ struct CompilerContext {
 	{
 	}
 
+	auto write(const uint8_t* begin, const uint8_t* end)
+	{
+		output.write(begin, end);
+	}
+
 	auto write8(uint8 val)
 	{
 		output.write8(val);
@@ -39,9 +44,9 @@ struct CompilerContext {
 		offset += 4;
 	}
 
-	auto write64(uint32 val)
+	auto write64(uint64 val)
 	{
-		output.write32(val);
+		output.write64(val);
 		offset += 8;
 	}
 
@@ -56,33 +61,39 @@ struct CompilerContext {
 		write8(static_cast<uint8>(get<Instruction::Type>(token.annotation)));
 	}
 
-	auto compileCodeSegment(TokenStream::const_iterator it, TokenStream::const_iterator end)
+	auto compileSegment(const Parser::SegmentInfo& segment)
 	{
-		for (; it != end; ++it) {
-			std::visit(visitor{
-				[](auto&&) {},
-				[this](uint8 num) { write8(num); },
-				[this](uint16 num) { write16(num); },
-				[this](uint32 num) { write32(num); },
-				[this](int8 num) { write8(static_cast<uint8>(num)); },
-				[this](int16 num) { write16(static_cast<uint16>(num)); },
-				[this](int32 num) { write32(static_cast<uint32>(num)); },
-				[this](float num) { write32(*reinterpret_cast<uint32*>(&num)); },
-				[this](double num) { write64(*reinterpret_cast<uint64*>(&num)); },
-				[this](Instruction::Type id) { write8(static_cast<uint8>(id)); },
-				[this](const Label* label) {
-					label->setOffset(offset);
-				},
-				[this](LabelRef ref) {
-					write32(ref.label->offset);
+		if (!segment.tokens) return;
+		for (auto it = segment.tokens->begin(); it != segment.tokens->end(); ++it) {
+			std::visit([&](auto&& arg) {
+				using T = std::decay_t<decltype(arg)>;
+
+				if constexpr (std::is_arithmetic_v<T>) {
+					auto arr = encodeBytes(arg);
+					write(reinterpret_cast<uint8_t*>(&arr[0]), reinterpret_cast<uint8_t*>(&arr[arr.size()]));
+				}
+				else if constexpr (std::is_same_v<T, std::string>) {
+					write(reinterpret_cast<const uint8_t*>(&arg[0]), reinterpret_cast<const uint8_t*>(&arg[arg.size()]));
+				}
+				else if constexpr (std::is_same_v<T, Instruction::Type>) {
+					write8(static_cast<uint8>(arg));
+				}
+				else if constexpr (std::is_same_v<T, const Label*>) {
+					arg->offset = offset;
+				}
+				else if constexpr (std::is_same_v<T, LabelRef>) {
+					write32(arg.label->offset);
+				}
+				else if constexpr (
+					!std::is_same_v<T, monostate> &&
+					!std::is_same_v<T, Segment::Type> &&
+					!std::is_same_v<T, Keyword::Type> &&
+					!std::is_same_v<T, Mnemonic::Type> &&
+					!std::is_same_v<T, DataType::Type>
+				) {
+					static_assert(always_false<T>::value, "non-exhaustive visitor!");
 				}
 			}, it->annotation);
-		}
-	}
-
-	auto compileDataSegment(TokenStream::const_iterator it, TokenStream::const_iterator end)
-	{
-		for (; it != end; ++it) {
 		}
 	}
 };
@@ -90,13 +101,8 @@ struct CompilerContext {
 auto compile(const Options& opts, const Parser::ParseInfo& parsed, IBinaryOutput& out)->Result
 {
 	CompilerContext ctx{opts, out, parsed};
-
-	for (auto& segment : parsed.segments[Segment::Data]) {
-		ctx.compileDataSegment(segment.begin, segment.end);
-	}
-
-	for (auto& segment : parsed.segments[Segment::Code]) {
-		ctx.compileCodeSegment(segment.begin, segment.end);
+	for (auto& segment : parsed.segments) {
+		ctx.compileSegment(segment);
 	}
 	return Result{};
 }

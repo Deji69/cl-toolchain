@@ -15,6 +15,7 @@ namespace CLARA {
 	}
 
 	// helper for variant visits, see: https://en.cppreference.com/w/cpp/utility/variant/visit
+	template<typename T> struct always_false : std::false_type {};
 	template<typename... Ts>
 	struct visitor : Ts... { using Ts::operator()...; };
 	template<typename... Ts> visitor(Ts...)->visitor<Ts...>;

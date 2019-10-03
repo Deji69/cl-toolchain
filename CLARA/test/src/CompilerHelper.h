@@ -38,61 +38,25 @@ struct MockOutputHandler : public IBinaryOutput {
 		return true;
 	}
 
-	virtual auto write8(uint8_t val)->void override
+	virtual auto write(const uint8_t* begin, const uint8_t* end)->void override
 	{
-		output.push_back(val);
-	}
-
-	virtual auto write16(uint16_t val)->void override
-	{
-		write8(reinterpret_cast<char*>(&val)[0]);
-		write8(reinterpret_cast<char*>(&val)[1]);
-	}
-
-	virtual auto write32(uint32_t val)->void override
-	{
-		write8(reinterpret_cast<char*>(&val)[0]);
-		write8(reinterpret_cast<char*>(&val)[1]);
-		write8(reinterpret_cast<char*>(&val)[2]);
-		write8(reinterpret_cast<char*>(&val)[3]);
-	}
-
-	virtual auto write64(uint64_t val)->void override
-	{
-		write8(reinterpret_cast<char*>(&val)[0]);
-		write8(reinterpret_cast<char*>(&val)[1]);
-		write8(reinterpret_cast<char*>(&val)[2]);
-		write8(reinterpret_cast<char*>(&val)[3]);
-		write8(reinterpret_cast<char*>(&val)[4]);
-		write8(reinterpret_cast<char*>(&val)[5]);
-		write8(reinterpret_cast<char*>(&val)[6]);
-		write8(reinterpret_cast<char*>(&val)[7]);
-	}
-
-	virtual auto write(string_view str)->void override
-	{
-		for (auto c : str) {
-			write8(c);
-		}
+		output.insert(output.end(), begin, end);
 	}
 };
 
 inline auto makeParseInfo(initializer_list<tuple<TokenType, TokenAnnotation>> tokenStreamInit)
 {
 	Parser::ParseInfo info;
-	info.tokens = make_unique<TokenStream>(tokenStreamInit);
-	auto segmentBeginIt = info.tokens->end();
-	for (auto it = info.tokens->begin(); it != info.tokens->end(); ++it) {
+	const auto tokens = TokenStream(tokenStreamInit);
+	auto* segmentPtr = &info.segments[Segment::Header];
+	for (auto it = tokens.begin(); it != tokens.end(); ++it) {
 		if (it->type == TokenType::Segment) {
-			if (segmentBeginIt != info.tokens->end()) {
-				info.segments[get<Segment::Type>(segmentBeginIt->annotation)].back().end = it;
-			}
-
-			auto& seg = info.segments[get<Segment::Type>(it->annotation)].emplace_back();
-			seg.begin = it;
-			seg.end = info.tokens->end();
-			segmentBeginIt = it;
+			segmentPtr = &info.segments[get<Segment::Type>(it->annotation)];
+			if (!segmentPtr->tokens)
+				segmentPtr->tokens = std::make_shared<TokenStream>();
 		}
+		else
+			segmentPtr->tokens->push(move(*it));
 	}
 	return info;
 }

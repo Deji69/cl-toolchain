@@ -22,4 +22,5 @@ else()
 	target_compile_options(clara_tests PRIVATE -Wall -Wextra -pedantic -Werror)
 endif()
 
+include(CTest)
 catch_discover_tests(clara_tests)

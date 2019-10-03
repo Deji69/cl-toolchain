@@ -10,27 +10,26 @@ auto lexerHelper = ParsingTestHelper(true);
 auto helper = ParsingTestHelper();
 
 auto parseAnnotation(string code, size_t idx) {
-	idx += 1;
-	auto res = helper.parse(".code\n" + code);
+	auto res = helper.parseCode(code);
 	REQUIRE(checkResult(res));
-	REQUIRE(res.info.tokens->size() > idx);
-	return (*res.info.tokens)[idx].annotation;
+	REQUIRE(res.info.segments[Segment::Code].tokens->size() > idx);
+	return (*res.info.segments[Segment::Code].tokens)[idx].annotation;
 }
 
 TEST_CASE("Lexer tokenizes EOF", "[Lexer]") {
-	auto res = lexerHelper.parse("\r\n\r\n");
+	auto res = lexerHelper.parseCode("\r\n\r\n");
 	REQUIRE(checkResult(res));
 
-	auto& tokens = *res.info.tokens;
+	auto& tokens = *res.info.segments[Segment::Code].tokens;
 	REQUIRE(tokens.size() == 1_uz);
 	CHECK(tokens[0].type == TokenType::EndOfFile);
 }
 
 TEST_CASE("Lexer skips whitespace", "[Lexer]") {
-	auto res = lexerHelper.parse(" \t\n\t");
+	auto res = lexerHelper.parseCode(" \t\n\t");
 	REQUIRE(checkResult(res));
 
-	auto& tokens = *res.info.tokens;
+	auto& tokens = *res.info.segments[Segment::Code].tokens;
 	REQUIRE(tokens.size() == 1_uz);
 	CHECK(tokens[0].type == TokenType::EndOfFile);
 	CHECK(tokens[0].text.empty());
@@ -38,49 +37,49 @@ TEST_CASE("Lexer skips whitespace", "[Lexer]") {
 
 TEST_CASE("Lexer tokenizes segments", "[Lexer]") {
 	auto res = lexerHelper.parse(".code");
-	auto& tokens = *res.info.tokens;
+	auto& tokens = *res.info.segments[Segment::Code].tokens;
 	REQUIRE(tokens.size() >= 1_uz);
-	REQUIRE(tokens[0].type == TokenType::Segment);
-	REQUIRE(get<Segment::Type>(tokens[0].annotation) == Segment::Code);
 }
 
 TEST_CASE("Lexer tokenizes instruction", "[Lexer]") {
-	auto res = lexerHelper.parse("nop");
+	auto res = lexerHelper.parseCode("nop");
 	REQUIRE(checkResult(res));
 
-	auto& tokens = *res.info.tokens;
+	auto& tokens = *res.info.segments[Segment::Code].tokens;
 	REQUIRE(tokens.size() >= 1_uz);
 	CHECK(tokens[0].type == TokenType::Instruction);
 	CHECK(get<Instruction::Type>(tokens[0].annotation) == Instruction::NOP);
 }
 
 TEST_CASE("Lexer skips comments", "[Lexer]") {
-	auto res = lexerHelper.parse("nop; comment here\n ; another comment\nnop");
+	auto res = lexerHelper.parseCode("nop; comment here\n ; another comment\nnop");
 	REQUIRE(checkResult(res));
 
-	auto& tokens = *res.info.tokens;
+	auto& tokens = *res.info.segments[Segment::Code].tokens;
 	REQUIRE(tokens.size() >= 3_uz);
 	CHECK(tokens[0].type == TokenType::Instruction);
 	CHECK(tokens[1].type == TokenType::Instruction);
 }
 
 TEST_CASE("Lexer tokenizes labels", "[Lexer]") {
-	auto res = lexerHelper.parse("label: nop");
+	auto res = lexerHelper.parseCode("label: nop");
 	REQUIRE(checkResult(res));
 
-	auto& tokens = *res.info.tokens;
-	CHECK(tokens.size() >= 2_uz);
+	auto& tokens = *res.info.segments[Segment::Code].tokens;
+	REQUIRE(tokens.size() >= 2_uz);
 	CHECK(tokens[0].type == TokenType::Label);
 	CHECK(tokens[1].type == TokenType::Instruction);
 }
 
 TEST_CASE("Lexer tokenizes separated instructions", "[Lexer]") {
-	lexerHelper.parseExpect("nop,nop", {TokenType::Instruction, TokenType::Instruction});
+	lexerHelper.parseExpect(".code\nnop,nop", {
+		{Segment::Code, {TokenType::Instruction, TokenType::Instruction}}
+	});
 }
 
 TEST_CASE("Lexer tokenizes numerics", "[Lexer]") {
 	SECTION("tokenizes decimals") {
-		auto& tokens = lexerHelper.parseExpect("123 3.14 -12 -12.4 1.e-4", {
+		auto& tokens = lexerHelper.parseExpectCode("123 3.14 -12 -12.4 1.e-4", {
 			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
 			TokenType::Numeric, TokenType::Numeric
 		});
@@ -93,7 +92,7 @@ TEST_CASE("Lexer tokenizes numerics", "[Lexer]") {
 	}
 	
 	SECTION("tokenizes hexadecimals") {
-		auto& tokens = lexerHelper.parseExpect("0x0 0x1 0x10 0xFF 0x100 -0x8F", {
+		auto& tokens = lexerHelper.parseExpectCode("0x0 0x1 0x10 0xFF 0x100 -0x8F", {
 			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
 			TokenType::Numeric, TokenType::Numeric
 		});
@@ -107,7 +106,7 @@ TEST_CASE("Lexer tokenizes numerics", "[Lexer]") {
 }
 
 TEST_CASE("Lexer tokenizes strings", "[Lexer]") {
-	lexerHelper.parseExpect("\"hello world\"\nlabel: \"here is\\\\\\\" a \\\"quoted\\\" string\" not_a_string", {
+	lexerHelper.parseExpectCode("\"hello world\"\nlabel: \"here is\\\\\\\" a \\\"quoted\\\" string\" not_a_string", {
 		TokenType::String, TokenType::Label, TokenType::String, TokenType::Identifier
 	});
 }
@@ -161,39 +160,39 @@ TEST_CASE("Parser enforces start of line tokens per segment", "[Parser]") {
 
 TEST_CASE("Parser parses strings with hex escape sequences", "[Parser]") {
 	SECTION("parses a single byte hex pair") {
-		auto& tokens = helper.parseExpect("\"\\x41\"", {TokenType::String});
+		auto& tokens = helper.parseExpectCode("\"\\x41\"", {TokenType::String});
 		REQUIRE(get<string>(tokens[0].annotation) == "A");
 	}
 	
 	SECTION("parses a single byte hex digit") {
-		auto& tokens = helper.parseExpect("\"\\x9\"", {TokenType::String});
+		auto& tokens = helper.parseExpectCode("\"\\x9\"", {TokenType::String});
 		REQUIRE(get<string>(tokens[0].annotation) == "\x09");
 	}
 	
 	SECTION("parses a two byte hex sequence") {
-		auto& tokens = helper.parseExpect("\"\\x4142\"", {TokenType::String});
+		auto& tokens = helper.parseExpectCode("\"\\x4142\"", {TokenType::String});
 		REQUIRE(get<string>(tokens[0].annotation) == "AB");
 	}
 	
 	SECTION("parses a three byte hex sequence") {
-		auto& tokens = helper.parseExpect("\"\\x414243\"", {TokenType::String});
+		auto& tokens = helper.parseExpectCode("\"\\x414243\"", {TokenType::String});
 		REQUIRE(get<string>(tokens[0].annotation) == "ABC");
 	}
 	
 	SECTION("parses a four byte hex sequence") {
-		auto& tokens = helper.parseExpect("\"\\x41424344\"", {TokenType::String});
+		auto& tokens = helper.parseExpectCode("\"\\x41424344\"", {TokenType::String});
 		REQUIRE(get<string>(tokens[0].annotation) == "ABCD");
 	}
 
 	SECTION("parsing stops at backslash to prevent interpreting extra characters as bytes") {
-		auto& tokens = helper.parseExpect("\"\\x4142\\CD\"", {TokenType::String});
+		auto& tokens = helper.parseExpectCode("\"\\x4142\\CD\"", {TokenType::String});
 		REQUIRE(get<string>(tokens[0].annotation) == "ABCD");
 	}
 }
 
 TEST_CASE("Parser parses numerics", "[Parser]") {
 	SECTION("parses decimals") {
-		auto& tokens = lexerHelper.parseExpect("123 3.14 -12 -12.4 1.e-4", {
+		auto& tokens = lexerHelper.parseExpectCode("123 3.14 -12 -12.4 1.e-4", {
 			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
 			TokenType::Numeric, TokenType::Numeric
 		});
@@ -206,7 +205,7 @@ TEST_CASE("Parser parses numerics", "[Parser]") {
 	}
 	
 	SECTION("parses hexadecimals") {
-		auto& tokens = lexerHelper.parseExpect("0x0 0x1 0x10 0x80 0xFF 0x100 0x8000 0xFFFF 0x10000 0x7FFFFFFF 0x80000000 0xFFFFFFFF", {
+		auto& tokens = lexerHelper.parseExpectCode("0x0 0x1 0x10 0x80 0xFF 0x100 0x8000 0xFFFF 0x10000 0x7FFFFFFF 0x80000000 0xFFFFFFFF", {
 			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
 			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
 			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
@@ -242,7 +241,7 @@ TEST_CASE("Parser parses numerics", "[Parser]") {
 	}
 	
 	SECTION("parses negated hexadecimals") {
-		auto& tokens = lexerHelper.parseExpect("-0x0 -0x1 -0x7F -0x80 -0x7FF -0x8000 -0x7FFFFFFF -0x80000000", {
+		auto& tokens = lexerHelper.parseExpectCode("-0x0 -0x1 -0x7F -0x80 -0x7FF -0x8000 -0x7FFFFFFF -0x80000000", {
 			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
 			TokenType::Numeric, TokenType::Numeric, TokenType::Numeric,
 			TokenType::Numeric, TokenType::Numeric
@@ -267,19 +266,19 @@ TEST_CASE("Parser parses numerics", "[Parser]") {
 	
 	SECTION("diagnoses invalid literals") {
 		{
-			auto res = lexerHelper.parse("push 0xFFFFFFFFFFFFFFFF1");
+			auto res = lexerHelper.parseCode("push 0xFFFFFFFFFFFFFFFF1");
 			REQUIRE(res.numErrors >= 1);
 			CHECK(res.reports[0].diagnosis.getCode() == DiagCode::InvalidNumericLiteral);
 		}
 		{
-			auto res = lexerHelper.parse("push -0x8000000000000000");
+			auto res = lexerHelper.parseCode("push -0x8000000000000000");
 			REQUIRE(res.numErrors >= 1);
 			CHECK(res.reports[0].diagnosis.getCode() == DiagCode::InvalidNumericLiteral);
 		}
 	}
 	
 	SECTION("parses floating-point literals") {
-		auto& tokens = lexerHelper.parseExpect("3.0 3.14 3.1415926535897932384626433832795", {
+		auto& tokens = lexerHelper.parseExpectCode("3.0 3.14 3.1415926535897932384626433832795", {
 			TokenType::Numeric, TokenType::Numeric
 		});
 		
@@ -291,12 +290,13 @@ TEST_CASE("Parser parses numerics", "[Parser]") {
 
 TEST_CASE("Parser parses labels", "[Parser]") {
 	SECTION("Labels can be defined") {
-		auto res = helper.parse(".code\nlabel:");
-		auto& tokens = *res.info.tokens;
+		auto res = helper.parseCode("label:");
+		auto& segment = res.info.segments[Segment::Code];
+		auto& tokens = *segment.tokens;
 		auto& labels = res.info.labels;
 		auto& labelMap = res.info.labelMap;
-		REQUIRE(tokens.size() == 3);
-		auto& labelToken = tokens[1];
+		REQUIRE(tokens.size() == 2);
+		auto& labelToken = tokens[0];
 		REQUIRE(labelToken.is(TokenType::Label, "label:"));
 		CHECK(is<const Label*>(labelToken.annotation));
 		auto it = labelMap.find("label");
@@ -309,25 +309,25 @@ TEST_CASE("Parser parses labels", "[Parser]") {
 	}
 
 	SECTION("Labels can be referenced") {
-		auto res = helper.parse(".code\nlabel: jmp label");
+		auto res = helper.parseCode("label: jmp label");
 		REQUIRE(checkResult(res));
-		auto& tokens = *res.info.tokens;
-		REQUIRE(tokens.size() == 5);
-		REQUIRE(is<LabelRef>(tokens[3].annotation));
-		auto ref = get<LabelRef>(tokens[3].annotation);
+		auto& tokens = *res.info.segments[Segment::Code].tokens;
+		REQUIRE(tokens.size() == 4);
+		REQUIRE(is<LabelRef>(tokens[2].annotation));
+		auto ref = get<LabelRef>(tokens[2].annotation);
 		REQUIRE(ref.label == res.info.labels[0].get());
-		REQUIRE(ref.label == get<const Label*>(tokens[1].annotation));
+		REQUIRE(ref.label == get<const Label*>(tokens[0].annotation));
 	}
 
 	SECTION("Labels can be defined after referencing") {
-		auto res = helper.parse(".code\njmp label\nlabel:");
+		auto res = helper.parseCode("jmp label\nlabel:");
 		REQUIRE(checkResult(res));
-		auto& tokens = *res.info.tokens;
-		REQUIRE(tokens.size() == 5);
-		REQUIRE(is<LabelRef>(tokens[2].annotation));
-		REQUIRE(is<const Label*>(tokens[3].annotation));
-		auto ref = get<LabelRef>(tokens[2].annotation);
-		REQUIRE(ref.label == get<const Label*>(tokens[3].annotation));
+		auto& tokens = *res.info.segments[Segment::Code].tokens;
+		REQUIRE(tokens.size() == 4);
+		REQUIRE(is<LabelRef>(tokens[1].annotation));
+		REQUIRE(is<const Label*>(tokens[2].annotation));
+		auto ref = get<LabelRef>(tokens[1].annotation);
+		REQUIRE(ref.label == get<const Label*>(tokens[2].annotation));
 	}
 }
 
@@ -335,16 +335,18 @@ TEST_CASE("Parser parses keywords", "[Parser]") {
 	SECTION("global keyword") {
 		auto res = helper.parse("global main\n.code\nmain:");
 		REQUIRE(checkResult(res));
-		auto& tokens = *res.info.tokens;
-		REQUIRE(tokens.size() == 5);
-		REQUIRE(tokens[0].type == TokenType::Keyword);
-		REQUIRE(is<Keyword::Type>(tokens[0].annotation));
-		CHECK(get<Keyword::Type>(tokens[0].annotation) == Keyword::Global);
-		REQUIRE(tokens[1].type == TokenType::LabelRef);
-		REQUIRE(is<LabelRef>(tokens[1].annotation));
-		auto ref = get<LabelRef>(tokens[1].annotation);
-		REQUIRE(is<const Label*>(tokens[3].annotation));
-		REQUIRE(ref.label == get<const Label*>(tokens[3].annotation));
+		auto& header = *res.info.segments[Segment::Header].tokens;
+		auto& code = *res.info.segments[Segment::Code].tokens;
+		REQUIRE(header.size() >= 2);
+		CHECK(header[0].type == TokenType::Keyword);
+		REQUIRE(is<Keyword::Type>(header[0].annotation));
+		CHECK(get<Keyword::Type>(header[0].annotation) == Keyword::Global);
+		CHECK(header[1].type == TokenType::LabelRef);
+		REQUIRE(is<LabelRef>(header[1].annotation));
+		auto ref = get<LabelRef>(header[1].annotation);
+		REQUIRE(code.size() >= 1);
+		REQUIRE(is<const Label*>(code[0].annotation));
+		REQUIRE(ref.label == get<const Label*>(code[0].annotation));
 		CHECK(ref.label->name == "main");
 	}
 }
@@ -377,20 +379,19 @@ TEST_CASE("Parser resolves mnemonics", "[Parser]") {
 
 TEST_CASE("Parser parses data segment definitions", "[Parser]") {
 	SECTION("Byte data value") {
-		auto res = helper.parse(".data\nBYTE_VALUE: DB 0xFF");
-		auto& tokens = *res.info.tokens;
+		auto res = helper.parseData("BYTE_VALUE: DB 0xFF");
+		auto& tokens = *res.info.segments[Segment::Data].tokens;
 		REQUIRE(checkResult(res));
-		REQUIRE(tokens.size() == 5);
-		CHECK(tokens[0].type == TokenType::Segment);
-		CHECK(tokens[1].type == TokenType::Label);
-		CHECK(tokens[2].type == TokenType::DataType);
-		CHECK(tokens[3].type == TokenType::Numeric);
-		CHECK(is<const Label*>(tokens[1].annotation));
-		CHECK(get<const Label*>(tokens[1].annotation)->segment == Segment::Data);
-		CHECK(is<DataType::Type>(tokens[2].annotation));
-		CHECK(get<DataType::Type>(tokens[2].annotation) == DataType::DB);
-		CHECK(is<uint8>(tokens[3].annotation));
-		CHECK(get<uint8>(tokens[3].annotation) == 0xFF);
+		REQUIRE(tokens.size() >= 3);
+		CHECK(tokens[0].type == TokenType::Label);
+		CHECK(tokens[1].type == TokenType::DataType);
+		CHECK(tokens[2].type == TokenType::Numeric);
+		CHECK(is<const Label*>(tokens[0].annotation));
+		CHECK(get<const Label*>(tokens[0].annotation)->segment == Segment::Data);
+		CHECK(is<DataType::Type>(tokens[1].annotation));
+		CHECK(get<DataType::Type>(tokens[1].annotation) == DataType::DB);
+		CHECK(is<uint8>(tokens[2].annotation));
+		CHECK(get<uint8>(tokens[2].annotation) == 0xFF);
 	}
 }
 
@@ -424,7 +425,7 @@ TEST_CASE("Error unexpected segment after tokens", "[Error Handling]") {
 
 TEST_CASE("Error unexpected label after tokens", "[Error Handling]") {
 	// parser picks up 'label' as an identifier (possible label pointer) and then errors on the ':' - this is ok?
-	auto res = lexerHelper.parse(".code\nnop label:");
+	auto res = lexerHelper.parseCode("nop label:");
 	REQUIRE(res.numErrors >= 1);
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::UnexpectedLabelAfterTokens);
 }
@@ -436,31 +437,31 @@ TEST_CASE("Error invalid identifier", "[Error Handling]") {
 }
 
 TEST_CASE("Error instruction passed as operand", "[Error Handling]") {
-	auto res = lexerHelper.parse("nop nop");
+	auto res = lexerHelper.parseCode("nop nop");
 	REQUIRE(res.numErrors == 1);
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::UnexpectedOperand);
 	CHECK(res.reports[0].diagnosis.getMessage() == "unexpected instruction encountered, use ',' to separate multiple instructions on one line"s);
 }
 
 TEST_CASE("Error instruction missing operand", "[Error Handling]") {
-	auto res = lexerHelper.parse("pushb");
+	auto res = lexerHelper.parseCode("pushb");
 	REQUIRE(res.numErrors == 1);
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::MissingOperand);
 }
 
 TEST_CASE("Error instruction invalid operand type", "[Error Handling]") {
-	auto res = lexerHelper.parse("pushb \"str\"");
+	auto res = lexerHelper.parseCode("pushb \"str\"");
 	REQUIRE(res.numErrors == 1);
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::InvalidOperandType);
 }
 
 TEST_CASE("Error undefined label", "[Error Handling]") {
-	auto res = helper.parse(".code\njmp label");
+	auto res = helper.parseCode("jmp label");
 	REQUIRE(res.numErrors >= 1);
-	auto& tokens = *res.info.tokens;
-	REQUIRE(tokens.size() >= 3);
-	REQUIRE(tokens[2].type == TokenType::LabelRef);
-	REQUIRE(is<string>(tokens[2].annotation));
-	CHECK(get<string>(tokens[2].annotation) == "label");
+	auto& tokens = *res.info.segments[Segment::Code].tokens;
+	REQUIRE(tokens.size() >= 2);
+	REQUIRE(tokens[1].type == TokenType::LabelRef);
+	REQUIRE(is<string>(tokens[1].annotation));
+	CHECK(get<string>(tokens[1].annotation) == "label");
 	REQUIRE(res.reports[0].diagnosis.getCode() == DiagCode::UnresolvedLabelReference);
 }

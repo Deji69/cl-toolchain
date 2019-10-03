@@ -28,7 +28,7 @@ public:
 		{ }
 
 		constexpr iter(T& stream, ptrdiff_t index) noexcept :
-			stream(&stream), index(index)
+			stream(&stream), index(static_cast<ptrdiff_t>(stream.size()) <= index ? -1 : index)
 		{ }
 
 		constexpr iter(const iter<std::remove_const_t<T>>& other) noexcept :
