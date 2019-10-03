@@ -15,6 +15,7 @@ struct LabelRef {
 };
 
 enum class TokenType {
+	None,
 	EndOfLine,
 	EndOfFile,
 	WhiteSpace,
@@ -50,7 +51,7 @@ using TokenAnnotation = variant<
 >;
 
 struct Token : public Source::Token {
-	TokenType type = TokenType::EndOfLine;
+	TokenType type = TokenType::None;
 	TokenAnnotation annotation;
 
 	Token() = default;
@@ -68,12 +69,15 @@ struct Token : public Source::Token {
 	auto getAssemblySize() const->size_t;
 };
 
+auto getAnnotationTokenType(const TokenAnnotation&)->TokenType;
+
 }
 
 template<>
 inline auto CLARA::to_string(CLASM::TokenType type)
 {
 	switch (type) {
+	case CLASM::TokenType::None: break;
 	case CLASM::TokenType::EndOfLine:
 		return "end of line"s;
 	case CLASM::TokenType::EndOfFile:

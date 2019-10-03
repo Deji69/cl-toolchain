@@ -2,7 +2,8 @@
 #include <CLARA/pch.h>
 
 using namespace CLARA;
-using namespace CLARA::CLASM;
+
+namespace CLARA::CLASM {
 
 auto getAnnotationSize(const TokenAnnotation& annotation) {
 	if (is<monostate>(annotation)) return 0;
@@ -12,6 +13,32 @@ auto getAnnotationSize(const TokenAnnotation& annotation) {
 	if (is<int64_t>(annotation) || is<uint64_t>(annotation) || is<double>(annotation)) return 8;
 	if (is<Instruction::Type>(annotation)) return 1;
 	return 0;
+}
+
+auto getAnnotationTokenType(const TokenAnnotation& annotation)->TokenType {
+	return std::visit([](auto&& arg) {
+		using T = std::decay_t<decltype(arg)>;
+		if constexpr (std::is_arithmetic_v<T>)
+			return TokenType::Numeric;
+		else if constexpr (std::is_same_v<T, string>)
+			return TokenType::String;
+		else if constexpr (std::is_same_v<T, const Label*>)
+			return TokenType::Label;
+		else if constexpr (std::is_same_v<T, LabelRef>)
+			return TokenType::LabelRef;
+		else if constexpr (std::is_same_v<T, Keyword::Type>)
+			return TokenType::Keyword;
+		else if constexpr (std::is_same_v<T, Segment::Type>)
+			return TokenType::Segment;
+		else if constexpr (std::is_same_v<T, Mnemonic::Type>)
+			return TokenType::Mnemonic;
+		else if constexpr (std::is_same_v<T, Instruction::Type>)
+			return TokenType::Instruction;
+		else if constexpr (std::is_same_v<T, DataType::Type>)
+			return TokenType::DataType;
+		return TokenType::None;
+	}, annotation);
+	return TokenType::None;
 }
 
 Token::Token(TokenType type, TokenAnnotation annotation) :
@@ -45,3 +72,5 @@ auto Token::getLineNumber() const -> size_t {
 auto Token::getText() const -> string_view { return text; }
 
 auto Token::getAssemblySize() const -> size_t { return getAnnotationSize(annotation); }
+
+}

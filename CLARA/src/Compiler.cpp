@@ -70,10 +70,10 @@ struct CompilerContext {
 
 				if constexpr (std::is_arithmetic_v<T>) {
 					auto arr = encodeBytes(arg);
-					write(reinterpret_cast<uint8_t*>(&arr[0]), reinterpret_cast<uint8_t*>(&arr[arr.size()]));
+					write(reinterpret_cast<uint8_t*>(&arr[0]), reinterpret_cast<uint8_t*>(&arr[0] + arr.size()));
 				}
 				else if constexpr (std::is_same_v<T, std::string>) {
-					write(reinterpret_cast<const uint8_t*>(&arg[0]), reinterpret_cast<const uint8_t*>(&arg[arg.size()]));
+					write(reinterpret_cast<const uint8_t*>(&arg[0]), reinterpret_cast<const uint8_t*>(&arg[0] + arg.size()));
 				}
 				else if constexpr (std::is_same_v<T, Instruction::Type>) {
 					write8(static_cast<uint8>(arg));

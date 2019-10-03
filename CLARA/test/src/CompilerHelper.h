@@ -44,10 +44,10 @@ struct MockOutputHandler : public IBinaryOutput {
 	}
 };
 
-inline auto makeParseInfo(initializer_list<tuple<TokenType, TokenAnnotation>> tokenStreamInit)
+inline auto makeParseInfo(const vector<pair<TokenType, TokenAnnotation>>& tokenStreamInit)
 {
 	Parser::ParseInfo info;
-	const auto tokens = TokenStream(tokenStreamInit);
+	const auto tokens = TokenStream{tokenStreamInit};
 	auto* segmentPtr = &info.segments[Segment::Header];
 	for (auto it = tokens.begin(); it != tokens.end(); ++it) {
 		if (it->type == TokenType::Segment) {
@@ -59,4 +59,15 @@ inline auto makeParseInfo(initializer_list<tuple<TokenType, TokenAnnotation>> to
 			segmentPtr->tokens->push(move(*it));
 	}
 	return info;
+}
+
+inline auto makeParseInfo(initializer_list<TokenAnnotation> tokenStreamInit)
+{
+	auto vec = small_vector<pair<TokenType, TokenAnnotation>>();
+
+	for (auto& annotation : tokenStreamInit) {
+		auto type = getAnnotationTokenType(annotation);
+		vec.push_back(make_pair(type, annotation));
+	}
+	return makeParseInfo(vec);
 }

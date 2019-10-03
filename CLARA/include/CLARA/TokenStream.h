@@ -148,16 +148,10 @@ public:
 		tokens.reserve(reserve);
 	}
 
-	TokenStream(initializer_list<tuple<TokenType, TokenAnnotation>> tokenInits)
+	template<typename T, typename = std::enable_if_t<!std::is_integral_v<T>>>
+	TokenStream(const T& tokenInits)
 	{
-		tokens.reserve(tokenInits.size());
-
-		for (auto& tokenInit : tokenInits) {
-			std::apply(
-				&TokenStream::push<TokenType, TokenAnnotation>,
-				std::tuple_cat(std::make_tuple(this), tokenInit)
-			);
-		}
+		initFrom(tokenInits);
 	}
 
 	[[nodiscard]] auto operator[](size_t index) noexcept->Token&
@@ -225,6 +219,20 @@ public:
 	{
 		tokens.emplace_back(forward<TArgs>(args)...);
 		return iterator(*this, size() - 1);
+	}
+
+private:
+	template<typename TCont>
+	auto initFrom(const TCont& inits)
+	{
+		tokens.reserve(std::distance(inits.begin(), inits.end()));
+
+		for (auto& tokenInit : inits) {
+			std::apply(
+				&TokenStream::push<TokenType, TokenAnnotation>,
+				std::tuple_cat(std::make_tuple(this), tokenInit)
+			);
+		}
 	}
 
 private:
