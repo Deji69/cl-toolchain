@@ -3,6 +3,10 @@
 
 namespace CLARA {
 
+enum class Endian {
+	Little, Big
+};
+
 template<typename FwdIt>
 inline auto join(FwdIt begin, FwdIt end, string_view delim = ",")->string
 {
@@ -75,11 +79,43 @@ auto stringBeginsWith(string_view s, const string& v)->bool;
 auto stringEndsWith(string_view s, string_view::value_type c)->bool;
 auto stringEndsWith(string_view s, const string& v)->bool;
 
+inline constexpr auto getSystemEndianness()->Endian
+{
+#ifdef _WIN32
+	return Endian::Little;
+#else
+	#if 0
+		// C++20 feature supported in MSVC, wait for further support
+		// Unfortunately preprocessor blocks targetting the Clang compiler cannot be used when using Visual Studio with Clang set as the compiler (?)
+		return std::endian::native == std::endian::little ? Endian::Little : Endian::Big;
+	#else
+		static const auto test = uint16_t{1};
+		static const auto endianness = *static_cast<const unsigned char*>(static_cast<const void*>(&test)) == 1
+			? Endian::Little
+			: Endian::Big;
+		return endianness;
+	#endif
+#endif
+}
+
 template<typename TInt, size_t TSize = sizeof(TInt)>
 constexpr auto encodeBytesLE(TInt value)->std::enable_if_t<std::is_arithmetic_v<TInt> && TSize <= sizeof(TInt), std::array<char, TSize>>
 {
 	auto arr = std::array<char, TSize>{};
-	std::reverse_copy(reinterpret_cast<uint8*>(&value), reinterpret_cast<uint8*>(&value) + TSize, arr.data());
+	if (getSystemEndianness() == Endian::Big) {
+		std::reverse_copy(
+			static_cast<uint8*>(static_cast<void*>(&value)),
+			static_cast<uint8*>(static_cast<void*>(&value)) + TSize,
+			arr.data()
+		);
+	}
+	else {
+		std::copy(
+			static_cast<uint8*>(static_cast<void*>(&value)),
+			static_cast<uint8*>(static_cast<void*>(&value)) + TSize,
+			arr.data()
+		);
+	}
 	return arr;
 }
 
@@ -87,23 +123,29 @@ template<typename TInt, size_t TSize = sizeof(TInt)>
 constexpr auto encodeBytesBE(TInt value)->std::enable_if_t<std::is_arithmetic_v<TInt> && TSize <= sizeof(TInt), std::array<char, TSize>>
 {
 	auto arr = std::array<char, TSize>{};
-	std::copy(reinterpret_cast<uint8*>(&value), reinterpret_cast<uint8*>(&value) + TSize, arr.data());
+	if (getSystemEndianness() == Endian::Little) {
+		std::reverse_copy(
+			static_cast<uint8*>(static_cast<void*>(&value)),
+			static_cast<uint8*>(static_cast<void*>(&value)) + TSize,
+			arr.data()
+		);
+	}
+	else {
+		std::copy(
+			static_cast<uint8*>(static_cast<void*>(&value)),
+			static_cast<uint8*>(static_cast<void*>(&value)) + TSize,
+			arr.data()
+		);
+	}
 	return arr;
 }
 
 template<typename TInt, size_t TSize = sizeof(TInt)>
 constexpr auto encodeBytes(TInt value)->std::enable_if_t<std::is_arithmetic_v<TInt>&& TSize <= sizeof(TInt), std::array<char, TSize>>
 {
-	// C++20 feature supported in MSVC, wait for at least Clang support to remove preprocessor block
-	// Unfortunately preprocessor blocks targetting the Clang compiler cannot be used when using Visual Studio with Clang set as the compiler
-#if 0
-	return std::endian::native == std::endian::little ? encodeBytesLE(value) : encodeBytesBE(value);
-#else
-	const auto test = uint16_t{1};
-	return *static_cast<const unsigned char*>(static_cast<const void*>(&test)) == 1
+	return getSystemEndianness() == Endian::Little
 		? encodeBytesLE<TInt, TSize>(value)
 		: encodeBytesBE<TInt, TSize>(value);
-#endif
 }
 
 }

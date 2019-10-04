@@ -36,3 +36,23 @@ TEST_CASE("compiles pushb instruction", "[Compile]")
 		{Instruction::PUSHB, 50_u8}
 	));
 }
+
+TEST_CASE("compiles pushw instruction", "[Compile]")
+{
+	REQUIRE(compileCheck(
+		{Segment::Code, Instruction::PUSHW, 0x8081_u16},
+		{Instruction::PUSHW, 0x81_u8, 0x80_u8}
+	));
+	REQUIRE(compileCheck(
+		{Segment::Code, Instruction::PUSHW, 258_u16},
+		{Instruction::PUSHW, 0x02_u8, 0x01_u8}
+	));
+}
+
+TEST_CASE("compiles pushd instruction", "[Compile]")
+{
+	REQUIRE(compileCheck(
+		{Segment::Code, Instruction::PUSHD, 0x80818283_u32},
+		{Instruction::PUSHD, 0x83_u8, 0x82_u8, 0x81_u8, 0x80_u8}
+	));
+}

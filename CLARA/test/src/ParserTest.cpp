@@ -171,22 +171,22 @@ TEST_CASE("Parser parses strings with hex escape sequences", "[Parser]") {
 	
 	SECTION("parses a two byte hex sequence") {
 		auto& tokens = helper.parseExpectCode("\"\\x4142\"", {TokenType::String});
-		REQUIRE(get<string>(tokens[0].annotation) == "AB");
+		REQUIRE(get<string>(tokens[0].annotation) == "BA");
 	}
 	
 	SECTION("parses a three byte hex sequence") {
 		auto& tokens = helper.parseExpectCode("\"\\x414243\"", {TokenType::String});
-		REQUIRE(get<string>(tokens[0].annotation) == "ABC");
+		REQUIRE(get<string>(tokens[0].annotation) == "CBA");
 	}
 	
 	SECTION("parses a four byte hex sequence") {
 		auto& tokens = helper.parseExpectCode("\"\\x41424344\"", {TokenType::String});
-		REQUIRE(get<string>(tokens[0].annotation) == "ABCD");
+		REQUIRE(get<string>(tokens[0].annotation) == "DCBA");
 	}
 
 	SECTION("parsing stops at backslash to prevent interpreting extra characters as bytes") {
 		auto& tokens = helper.parseExpectCode("\"\\x4142\\CD\"", {TokenType::String});
-		REQUIRE(get<string>(tokens[0].annotation) == "ABCD");
+		REQUIRE(get<string>(tokens[0].annotation) == "BACD");
 	}
 }
 
